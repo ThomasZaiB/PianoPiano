@@ -3,6 +3,7 @@ package com.tuapp.piano.data.audio
 import android.content.Context
 import android.content.res.AssetManager
 import com.tuapp.piano.domain.model.Mano
+import com.tuapp.piano.domain.model.Reverberacion
 import com.tuapp.piano.domain.model.RelojSnapshot
 import com.tuapp.piano.domain.repository.AudioEngineRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -74,6 +75,11 @@ class AudioBridge @Inject constructor(
     override fun transporteDetener() = post(EV_TRANSPORT_STOP)
     override fun irATick(tick: Double) = post(EV_SEEK, valor = tick)
 
+    override fun metronomo(activo: Boolean, numerador: Int, denominador: Int) =
+        post(EV_METRONOMO, nota = numerador, velocidad = denominador, valor = if (activo) 1.0 else 0.0)
+
+    override fun reverberacion(preset: Reverberacion) = post(EV_REVERB, nota = preset.codigo)
+
     /** Sincronizado solo para proteger los arrays reutilizados (contención ~nula). */
     @Synchronized
     override fun leerReloj(destino: RelojSnapshot) {
@@ -115,6 +121,8 @@ class AudioBridge @Inject constructor(
         private const val EV_TRANSPORT_START = 5
         private const val EV_TRANSPORT_STOP = 6
         private const val EV_SEEK = 7
+        private const val EV_METRONOMO = 8
+        private const val EV_REVERB = 9
         private const val INMEDIATO = -1.0
 
         init {

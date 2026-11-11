@@ -82,8 +82,7 @@ void SoundFontPlayer::render(float *out, int32_t numFrames) noexcept {
         return;
     }
     tsf_render_float(mTsf, out, numFrames, 0);
-    // Protección barata contra saturación digital (clipping duro a ±1).
-    for (int32_t i = 0; i < samples; ++i) out[i] = std::clamp(out[i], -1.0f, 1.0f);
+    // Sin recorte aquí: el motor aplica después reverberación, metrónomo y el limitador.
 }
 
 } // namespace piano

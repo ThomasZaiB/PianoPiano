@@ -135,7 +135,11 @@ fun PianoScreen(
     var teclado by remember { mutableStateOf<PianoSurfaceView?>(null) }
     LaunchedEffect(teclado) {
         val vista = teclado ?: return@LaunchedEffect
-        vm.resultadosTecla.collect { vista.marcarResultado(it.nota, it.acierto) }
+        vm.resultadosTecla.collect {
+            vista.marcarResultado(it.nota, it.acierto)
+            // Vibración de rechazo al fallar: performHapticFeedback no necesita el permiso VIBRATE.
+            if (!it.acierto && vm.ui.value.ajustes.vibrarAlFallar) vista.performHapticFeedback(HAPTICA_ERROR)
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -185,6 +189,8 @@ fun PianoScreen(
                     vista.teclasVisibles = ui.teclasVisibles
                     vista.notaDivision = ui.ajustes.notaDivision
                     vista.dinamicaTactil = ui.ajustes.dinamicaTactil
+                    vista.sensibilidad = ui.ajustes.sensibilidad
+                    vista.vibrarAlTocar = ui.ajustes.vibrarAlTocar
                     vista.compasesVisibles = ui.ajustes.velocidadCascada.compasesVisibles
                     vista.etiquetas = TecladoGeometria.etiquetas(ui.ajustes.notacion, ui.ajustes.etiquetas)
                 },
@@ -754,3 +760,11 @@ private fun DialogoGuardar(
         },
     )
 }
+
+/** REJECT existe desde Android 11; antes, la pulsación larga es lo más parecido a un "no". */
+private val HAPTICA_ERROR =
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+        android.view.HapticFeedbackConstants.REJECT
+    } else {
+        android.view.HapticFeedbackConstants.LONG_PRESS
+    }

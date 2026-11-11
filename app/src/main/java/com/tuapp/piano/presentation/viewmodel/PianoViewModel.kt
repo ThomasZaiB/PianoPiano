@@ -236,7 +236,12 @@ class PianoViewModel @Inject constructor(
                 .collect { (estado, sf, error) -> _ui.update { it.copy(estadoMotor = estado, soundFont = sf, error = error) } }
         }
         viewModelScope.launch {
-            ajustesRepo.ajustes.collect { a -> _ui.update { it.copy(ajustes = a, teclasVisibles = a.teclasVisibles) } }
+            ajustesRepo.ajustes.collect { a ->
+                val reverbAntes = _ui.value.ajustes.reverberacion
+                _ui.update { it.copy(ajustes = a, teclasVisibles = a.teclasVisibles) }
+                // Cambiada en Ajustes con el piano abierto (o al volver): el motor se entera ya.
+                if (adquirido && a.reverberacion != reverbAntes) motor.reverberacion(a.reverberacion)
+            }
         }
         viewModelScope.launch {
             // Llamada entrante u otra app de música: se pausa todo, como al ir a segundo plano.
@@ -290,6 +295,7 @@ class PianoViewModel @Inject constructor(
 
     private suspend fun prepararMotor() {
         motor.setTempo(_ui.value.bpm)
+        motor.reverberacion(_ui.value.ajustes.reverberacion)
         if (primeraPreparacion) {
             // El motor es compartido: otra pantalla pudo dejarlo en cualquier posición.
             primeraPreparacion = false

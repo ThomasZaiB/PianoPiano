@@ -4,6 +4,7 @@
 #include <time.h>
 
 #include <algorithm>
+#include <cmath>
 
 #define LOG_TAG "PianoEngine"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -87,6 +88,10 @@ bool AudioEngine::openAndStartLocked() {
 
     // El stream aún no corre: es seguro tocar el sintetizador desde este hilo.
     mPlayer.configure(mStream->getSampleRate());
+    // Los efectos reservan aquí su memoria (búferes de la reverberación a esta frecuencia).
+    mReverb.configurar(mStream->getSampleRate());
+    mMetronome.configurar(mStream->getSampleRate());
+    mLimiter.configurar(mStream->getSampleRate());
 
     // Doble búfer de "bursts": el mínimo estable en la mayoría de equipos.
     // (Paso posterior opcional: oboe::LatencyTuner para ajustarlo según xruns.)
@@ -121,6 +126,9 @@ void AudioEngine::closeLocked() {
     mPlayer.allNotesOff();
     // El motor es compartido entre pantallas: ninguna debe heredar el pedal de otra.
     mPlayer.resetSustain();
+    // Tampoco el metrónomo: lo vuelve a pedir quien lo necesite.
+    mMetronomeOn = false;
+    mMetronome.silenciar();
 }
 
 void AudioEngine::onErrorAfterClose(oboe::AudioStream *stream, oboe::Result error) {
@@ -211,8 +219,8 @@ oboe::DataCallbackResult AudioEngine::onAudioReady(oboe::AudioStream *stream, vo
 
 void AudioEngine::renderBlock(float *out, int32_t numFrames) noexcept {
     int32_t done = 0;
+    const double blockStartTick = currentTick();
     if (mTransportRunning && mTicksPerFrame > 0.0) {
-        const double blockStartTick = currentTick();
         while (!mScheduler.empty()) {
             const double offsetFrames = (mScheduler.top().value - blockStartTick) / mTicksPerFrame;
             if (offsetFrames >= numFrames) break; // pertenece a un bloque futuro
@@ -228,6 +236,27 @@ void AudioEngine::renderBlock(float *out, int32_t numFrames) noexcept {
         }
     }
     if (done < numFrames) mPlayer.render(out + done * 2, numFrames - done);
+    postProcess(out, numFrames, blockStartTick);
+}
+
+void AudioEngine::postProcess(float *out, int32_t numFrames, double blockStartTick) noexcept {
+    mReverb.procesar(out, numFrames);
+
+    // Metrónomo: si un tiempo del compás cae dentro de este bloque, clic en su muestra exacta.
+    if (mMetronomeOn && mTransportRunning && mTicksPerFrame > 0.0 && mMetronomeTicksPerBeat > 0.0) {
+        const double beat = std::ceil(blockStartTick / mMetronomeTicksPerBeat);
+        const double offset = (beat * mMetronomeTicksPerBeat - blockStartTick) / mTicksPerFrame;
+        if (offset < numFrames) {
+            const auto beatIndex = static_cast<int64_t>(beat);
+            mMetronome.disparar(beatIndex % mMetronomeBeatsPerBar == 0, static_cast<int32_t>(offset));
+        }
+    }
+    mMetronome.mezclar(out, numFrames);
+
+    mLimiter.procesar(out, numFrames);
+    // Red de seguridad: tras el limitador casi nunca actúa.
+    const int32_t samples = numFrames * 2;
+    for (int32_t i = 0; i < samples; ++i) out[i] = std::clamp(out[i], -1.0f, 1.0f);
 }
 
 void AudioEngine::applyNote(const EngineEvent &e, bool scheduled) noexcept {
@@ -285,6 +314,16 @@ void AudioEngine::handleEvent(const EngineEvent &e) noexcept {
                 mTransportRunning = false;
             }
             clearScheduled();
+            break;
+        case EventType::Metronome:
+            mMetronomeOn = e.value >= 0.5;
+            mMetronomeBeatsPerBar = std::max<int32_t>(1, e.key);
+            // Unidad de pulso según el denominador (en 6/8, una corchea).
+            mMetronomeTicksPerBeat = kPPQ * 4.0 / std::max<int32_t>(1, e.velocity);
+            if (!mMetronomeOn) mMetronome.silenciar();
+            break;
+        case EventType::Reverb:
+            mReverb.setPreset(static_cast<Reverberacion::Preset>(std::min<uint8_t>(e.key, 2)));
             break;
         case EventType::Seek:
             mTickAnchor = std::max(0.0, e.value);

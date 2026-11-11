@@ -43,7 +43,7 @@ public:
     void setSustain(int channel, bool down) noexcept;
     /** Pedal arriba en todos los canales. */
     void resetSustain() noexcept;
-    /** Escribe numFrames frames estéreo intercalados (sobrescribe, no mezcla). */
+    /** Escribe numFrames frames estéreo intercalados (sobrescribe, no mezcla). Sin limitar: puede pasar de ±1. */
     void render(float *out, int32_t numFrames) noexcept;
 
 private:

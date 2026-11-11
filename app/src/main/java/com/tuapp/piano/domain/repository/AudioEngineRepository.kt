@@ -1,6 +1,7 @@
 package com.tuapp.piano.domain.repository
 
 import com.tuapp.piano.domain.model.Mano
+import com.tuapp.piano.domain.model.Reverberacion
 import com.tuapp.piano.domain.model.RelojSnapshot
 
 /**
@@ -33,6 +34,12 @@ interface AudioEngineRepository {
     fun transporteDetener(): Boolean
     fun irATick(tick: Double): Boolean
     fun leerReloj(destino: RelojSnapshot)
+
+    // Efectos del motor
+    /** Metrónomo nativo: el hilo de audio da un clic en cada tiempo mientras el transporte corre. */
+    fun metronomo(activo: Boolean, numerador: Int, denominador: Int): Boolean
+
+    fun reverberacion(preset: Reverberacion): Boolean
 
     // Diagnóstico
     fun latenciaMs(): Double

@@ -19,6 +19,8 @@ import com.tuapp.piano.domain.model.Mano
 import com.tuapp.piano.domain.model.Notacion
 import com.tuapp.piano.domain.model.PPQ
 import com.tuapp.piano.domain.model.RelojSnapshot
+import com.tuapp.piano.domain.model.SensibilidadToque
+import android.view.HapticFeedbackConstants
 import com.tuapp.piano.presentation.ui.theme.Paleta
 import com.tuapp.piano.presentation.ui.piano.TecladoGeometria as G
 import java.util.concurrent.atomic.AtomicIntegerArray
@@ -64,6 +66,12 @@ class PianoSurfaceView @JvmOverloads constructor(
 
     /** false: todas las notas suenan con [VELOCIDAD_FIJA], sin importar dónde se toque. */
     @Volatile var dinamicaTactil: Boolean = true
+
+    /** Curva de respuesta al toque (Ajustes). NORMAL = reparto lineal original. */
+    @Volatile var sensibilidad: SensibilidadToque = SensibilidadToque.NORMAL
+
+    /** Vibración corta en cada tecla (apagada por defecto: el motor de vibración hace ruido). */
+    @Volatile var vibrarAlTocar: Boolean = false
 
     /** Compases que caben en la cascada: más compases = las notas caen más despacio. */
     @Volatile var compasesVisibles: Int = 2
@@ -551,6 +559,7 @@ class PianoSurfaceView @JvmOverloads constructor(
         dedosPorNota[nota]++
         teclasTocadas.set(nota, mano.ordinal + 1)
         listener?.onNoteOn(nota, velocidad, mano)
+        if (vibrarAlTocar) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
     }
 
     private fun soltar(nota: Int) {
@@ -571,7 +580,7 @@ class PianoSurfaceView @JvmOverloads constructor(
         if (!dinamicaTactil) return VELOCIDAD_FIJA
         val alto = if (G.esNegra[nota]) altoTeclado * G.PROPORCION_ALTO_NEGRA else altoTeclado
         val rel = ((y - topTeclado) / alto).coerceIn(0f, 1f)
-        return (VELOCIDAD_MIN + rel * (127 - VELOCIDAD_MIN)).toInt()
+        return sensibilidad.velocidad(rel)
     }
 
     /** cx en coordenadas de contenido (ya sumado el scroll). -1 si no hay tecla. */
@@ -642,7 +651,6 @@ class PianoSurfaceView @JvmOverloads constructor(
         /** Dedo que empezó en una tecla y salió hacia la cascada: sigue vivo para el glissando. */
         const val FUERA_DEL_TECLADO = -4
         const val MIN_TECLAS_VISIBLES = 10
-        const val VELOCIDAD_MIN = 45
         const val PROPORCION_TECLADO = 0.34f
         const val VELOCIDAD_FIJA = 100
         /** Límite de Android para la exclusión de gestos por borde (View.setSystemGestureExclusionRects). */

@@ -48,6 +48,8 @@ import com.tuapp.piano.domain.model.Ajustes
 import com.tuapp.piano.domain.model.EtiquetasTeclado
 import com.tuapp.piano.domain.model.NombresNotas
 import com.tuapp.piano.domain.model.Notacion
+import com.tuapp.piano.domain.model.Reverberacion
+import com.tuapp.piano.domain.model.SensibilidadToque
 import com.tuapp.piano.domain.model.VelocidadCascada
 import com.tuapp.piano.presentation.ui.theme.Espacio
 import com.tuapp.piano.presentation.ui.theme.PianoColors
@@ -145,6 +147,49 @@ fun AjustesScreen(
                     activo = a.dinamicaTactil,
                     onCambiar = vm::cambiarDinamica,
                 )
+                if (a.dinamicaTactil) {
+                    Opcion(stringResource(R.string.ajustes_sensibilidad), stringResource(R.string.ajustes_sensibilidad_desc)) {
+                        Segmentos(
+                            opciones = SensibilidadToque.entries,
+                            seleccionada = a.sensibilidad,
+                            etiqueta = {
+                                stringResource(
+                                    when (it) {
+                                        SensibilidadToque.SUAVE -> R.string.ajustes_sensibilidad_suave
+                                        SensibilidadToque.NORMAL -> R.string.ajustes_sensibilidad_normal
+                                        SensibilidadToque.FUERTE -> R.string.ajustes_sensibilidad_fuerte
+                                    },
+                                )
+                            },
+                            onElegir = vm::cambiarSensibilidad,
+                        )
+                    }
+                }
+                Interruptor(
+                    titulo = stringResource(R.string.ajustes_vibrar_tocar),
+                    descripcion = stringResource(R.string.ajustes_vibrar_tocar_desc),
+                    activo = a.vibrarAlTocar,
+                    onCambiar = vm::cambiarVibrarAlTocar,
+                )
+            }
+
+            Seccion(stringResource(R.string.ajustes_seccion_sonido)) {
+                Opcion(stringResource(R.string.ajustes_reverb), stringResource(R.string.ajustes_reverb_desc)) {
+                    Segmentos(
+                        opciones = Reverberacion.entries,
+                        seleccionada = a.reverberacion,
+                        etiqueta = {
+                            stringResource(
+                                when (it) {
+                                    Reverberacion.APAGADA -> R.string.ajustes_reverb_apagada
+                                    Reverberacion.SALA -> R.string.ajustes_reverb_sala
+                                    Reverberacion.AUDITORIO -> R.string.ajustes_reverb_auditorio
+                                },
+                            )
+                        },
+                        onElegir = vm::cambiarReverberacion,
+                    )
+                }
             }
 
             Seccion(stringResource(R.string.ajustes_seccion_cascada)) {
@@ -164,6 +209,15 @@ fun AjustesScreen(
                         onElegir = vm::cambiarVelocidad,
                     )
                 }
+            }
+
+            Seccion(stringResource(R.string.ajustes_seccion_practica)) {
+                Interruptor(
+                    titulo = stringResource(R.string.ajustes_vibrar_fallar),
+                    descripcion = stringResource(R.string.ajustes_vibrar_fallar_desc),
+                    activo = a.vibrarAlFallar,
+                    onCambiar = vm::cambiarVibrarAlFallar,
+                )
             }
 
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {

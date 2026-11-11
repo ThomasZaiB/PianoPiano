@@ -19,9 +19,11 @@ enum class EventType : uint8_t {
     TransportStart = 5, // el reloj PPQ empieza a avanzar
     TransportStop = 6,  // el reloj PPQ se congela y se vacía la cola programada
     Seek = 7,           // value = tick absoluto; vacía la cola programada
+    Metronome = 8,      // value >= 0.5 -> activo; key = numerador, velocity = denominador del compás
+    Reverb = 9,         // key = preset (0 apagada, 1 sala, 2 auditorio)
 };
 
-constexpr int kEventTypeCount = 8;
+constexpr int kEventTypeCount = 10;
 
 /** 16 bytes, trivialmente copiable: cabe en el ring buffer sin asignaciones. */
 struct EngineEvent {

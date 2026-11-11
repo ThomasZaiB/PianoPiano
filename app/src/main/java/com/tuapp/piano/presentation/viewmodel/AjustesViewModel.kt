@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import com.tuapp.piano.domain.model.Ajustes
 import com.tuapp.piano.domain.model.EtiquetasTeclado
 import com.tuapp.piano.domain.model.Notacion
+import com.tuapp.piano.domain.model.Reverberacion
+import com.tuapp.piano.domain.model.SensibilidadToque
 import com.tuapp.piano.domain.model.VelocidadCascada
 import com.tuapp.piano.domain.repository.AjustesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,6 +29,14 @@ class AjustesViewModel @Inject constructor(
     fun cambiarDinamica(activa: Boolean) = repositorio.actualizar { it.copy(dinamicaTactil = activa) }
 
     fun cambiarVelocidad(v: VelocidadCascada) = repositorio.actualizar { it.copy(velocidadCascada = v) }
+
+    fun cambiarSensibilidad(s: SensibilidadToque) = repositorio.actualizar { it.copy(sensibilidad = s) }
+
+    fun cambiarReverberacion(r: Reverberacion) = repositorio.actualizar { it.copy(reverberacion = r) }
+
+    fun cambiarVibrarAlTocar(activa: Boolean) = repositorio.actualizar { it.copy(vibrarAlTocar = activa) }
+
+    fun cambiarVibrarAlFallar(activa: Boolean) = repositorio.actualizar { it.copy(vibrarAlFallar = activa) }
 
     /** Vuelve a los valores de fábrica, salvo el zoom (no es un ajuste de esta pantalla). */
     fun restablecer() = repositorio.actualizar { Ajustes(teclasVisibles = it.teclasVisibles) }

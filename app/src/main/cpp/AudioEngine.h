@@ -6,6 +6,7 @@
 #include <memory>
 #include <mutex>
 
+#include "Efectos.h"
 #include "EngineEvent.h"
 #include "EventScheduler.h"
 #include "MasterClock.h"
@@ -68,6 +69,7 @@ private:
     void applyNote(const EngineEvent &e, bool scheduled) noexcept;
     void clearScheduled() noexcept;
     void renderBlock(float *out, int32_t numFrames) noexcept;
+    void postProcess(float *out, int32_t numFrames, double blockStartTick) noexcept;
     double currentTick() const noexcept;
     void reanchor() noexcept;
     void updateTicksPerFrame() noexcept;
@@ -95,6 +97,15 @@ private:
     // Notas encendidas por el secuenciador: al pausar/saltar se apagan solo esas,
     // sin cortar lo que el usuario esté tocando en vivo en otras teclas.
     bool mScheduledSounding[SoundFontPlayer::kChannelCount][128] = {};
+
+    // ---- Efectos (hilo de audio; memoria reservada en openAndStartLocked) ----
+    // Cadena: sintetizador -> reverberación -> metrónomo (seco) -> limitador -> clamp.
+    Reverberacion mReverb;
+    Metronomo mMetronome;
+    Limitador mLimiter;
+    bool mMetronomeOn = false;
+    int32_t mMetronomeBeatsPerBar = 4;
+    double mMetronomeTicksPerBeat = kPPQ;
 };
 
 } // namespace piano

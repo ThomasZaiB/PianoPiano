@@ -76,6 +76,8 @@ private class MotorFalso : AudioEngineRepository {
     override fun latenciaMs() = 10.0
     override fun xRuns() = 0
     override fun streamAbierto() = abierto
+    override fun metronomo(activo: Boolean, numerador: Int, denominador: Int) = registro.add("metro $activo")
+    override fun reverberacion(preset: com.tuapp.piano.domain.model.Reverberacion) = true
 
     fun copia(): List<String> = synchronized(registro) { registro.toList() }
 }
@@ -178,7 +180,7 @@ class TransporteViewModelTest {
         avanzar(300)
         assertEquals(EstadoGrabacion.PAUSADA, vm.ui.value.grabacion)
         assertFalse("No debe arrancar el reloj: ${motor.copia()}", "start" in motor.copia())
-        assertFalse("Ni programar el metrónomo", motor.copia().any { it.startsWith("prog") })
+        assertFalse("Ni encender el metrónomo", "metro true" in motor.copia())
     }
 
     @Test fun grabar_pausaMientrasEsperaElSeek_noArrancaNada() {

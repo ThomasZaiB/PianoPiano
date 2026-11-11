@@ -359,3 +359,22 @@ class EventosReproduccionTest {
         assertEquals(listOf(true, false, true, false), e.map { it.encender })
     }
 }
+
+class SensibilidadToqueTest {
+    @Test fun normal_esElRepartoLinealOriginal() {
+        for (i in 0..20) {
+            val rel = i / 20f
+            assertEquals((45 + rel * (127 - 45)).toInt(), com.tuapp.piano.domain.model.SensibilidadToque.NORMAL.velocidad(rel))
+        }
+    }
+
+    @Test fun curvas_vanDe45A127YSuaveQuedaPorDebajoDeFuerte() {
+        for (s in com.tuapp.piano.domain.model.SensibilidadToque.entries) {
+            assertEquals(45, s.velocidad(0f))
+            assertEquals(127, s.velocidad(1f))
+        }
+        val suave = com.tuapp.piano.domain.model.SensibilidadToque.SUAVE.velocidad(0.5f)
+        val fuerte = com.tuapp.piano.domain.model.SensibilidadToque.FUERTE.velocidad(0.5f)
+        assertTrue(suave < 86 && 86 < fuerte)
+    }
+}

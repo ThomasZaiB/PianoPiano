@@ -5,6 +5,8 @@ import androidx.core.content.edit
 import com.tuapp.piano.domain.model.Ajustes
 import com.tuapp.piano.domain.model.EtiquetasTeclado
 import com.tuapp.piano.domain.model.Notacion
+import com.tuapp.piano.domain.model.Reverberacion
+import com.tuapp.piano.domain.model.SensibilidadToque
 import com.tuapp.piano.domain.model.VelocidadCascada
 import com.tuapp.piano.domain.repository.AjustesRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -43,6 +45,10 @@ class AjustesRepositoryImpl @Inject constructor(
                 dinamicaTactil = prefs.getBoolean(K_DINAMICA, d.dinamicaTactil),
                 velocidadCascada = enumDe(prefs.getString(K_CASCADA, null), d.velocidadCascada),
                 teclasVisibles = prefs.getInt(K_ZOOM, d.teclasVisibles),
+                sensibilidad = enumDe(prefs.getString(K_SENSIBILIDAD, null), d.sensibilidad),
+                reverberacion = enumDe(prefs.getString(K_REVERB, null), d.reverberacion),
+                vibrarAlTocar = prefs.getBoolean(K_VIBRAR_TOCAR, d.vibrarAlTocar),
+                vibrarAlFallar = prefs.getBoolean(K_VIBRAR_FALLAR, d.vibrarAlFallar),
             ),
         )
     }
@@ -54,6 +60,10 @@ class AjustesRepositoryImpl @Inject constructor(
         putBoolean(K_DINAMICA, a.dinamicaTactil)
         putString(K_CASCADA, a.velocidadCascada.name)
         putInt(K_ZOOM, a.teclasVisibles)
+        putString(K_SENSIBILIDAD, a.sensibilidad.name)
+        putString(K_REVERB, a.reverberacion.name)
+        putBoolean(K_VIBRAR_TOCAR, a.vibrarAlTocar)
+        putBoolean(K_VIBRAR_FALLAR, a.vibrarAlFallar)
     }
 
     private fun normalizar(a: Ajustes) = a.copy(
@@ -69,6 +79,10 @@ class AjustesRepositoryImpl @Inject constructor(
         const val K_DINAMICA = "dinamica_tactil"
         const val K_CASCADA = "velocidad_cascada"
         const val K_ZOOM = "teclas_visibles"
+        const val K_SENSIBILIDAD = "sensibilidad"
+        const val K_REVERB = "reverberacion"
+        const val K_VIBRAR_TOCAR = "vibrar_al_tocar"
+        const val K_VIBRAR_FALLAR = "vibrar_al_fallar"
 
         /** Un valor guardado que ya no existe (enum renombrado) vuelve al valor por defecto. */
         inline fun <reified T : Enum<T>> enumDe(nombre: String?, porDefecto: T): T =
