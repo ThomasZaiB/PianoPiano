@@ -1,7 +1,8 @@
 # PianoPiano
 
 App Android de piano: teclado de 88 teclas, cascada de notas a 60 FPS y motor de audio
-de baja latencia en C++ (Oboe + TinySoundFont). Ahora con menú, biblioteca (Room),
+de baja latencia en C++ (Oboe + TinySoundFont, con reverberación, limitador y metrónomo
+nativos). Ahora con menú, biblioteca (Room),
 grabación con cuantización, modo práctica y exportación a MIDI.
 
 ## Cómo ejecutarlo
@@ -56,27 +57,52 @@ Hay dos formas, las dos con la misma notación de texto:
 
 Incluidas ahora: *Himno de la Alegría* (demo) y *Merry-Go-Round of Life*.
 
-## Integración con el motor existente
+## Motor de audio y teclado
 
-**No se modificó** `app/src/main/cpp/`, ni `PianoSurfaceView`, ni `AudioBridge`.
-Todo lo nuevo usa sus APIs públicas:
+La restricción de las primeras fases ("no se modifican `cpp/`, `PianoSurfaceView` ni
+`AudioBridge`") ya no rige: desde la ronda de mejoras de noviembre de 2026 los tres
+se tocan cuando hace falta (ver `docs/INFORME_MEJORAS.md`). Siguen valiendo sus reglas:
 
-- `AudioEngineRepository` (lo implementa `AudioBridge`): notas en vivo y programadas,
-  transporte (`transporteIniciar/Detener`, `irATick`), tempo y reloj.
-- `PianoSurfaceView`: `listener`, `fuenteReloj`, `setCancion()`, `latenciaAudioMs`, `teclasVisibles`.
+- **Hilo de audio** (`AudioEngine::onAudioReady` y todo lo que llama): sin locks,
+  `new`/`malloc`, JNI, logs ni E/S. La memoria de los efectos se reserva al abrir el stream.
+- **Eventos Kotlin → C++**: `EngineEvent` de 16 bytes por un ring buffer SPSC.
+  `EventType` (`EngineEvent.h`), `kEventTypeCount` y las constantes `EV_*` de
+  `AudioBridge.kt` deben coincidir. Hoy hay 10: notas, todas off, pedal, tempo,
+  transporte, Seek, **metrónomo** (8) y **reverberación** (9).
+- **Cadena de salida**: TinySoundFont → reverberación (Freeverb, Apagada/Sala/Auditorio)
+  → clic del metrónomo → limitador de picos → recorte de seguridad.
+- **Hilo de render** de `PianoSurfaceView`: cero asignaciones por frame; los `Shader`
+  se crean en `onSizeChanged`. En reposo deja de redibujar y se despierta con cada cambio
+  (más un sondeo del reloj cada 50 ms).
 
-Piezas nuevas que hacen falta para ello:
+Piezas de Kotlin que rodean al motor:
 
-- **`GestorMotorAudio`** (dominio, singleton): único dueño del stream. Carga el SoundFont
-  una vez y cuenta cuántas pantallas lo usan, para que dos pantallas del piano que
-  conviven durante la animación de navegación no se pisen.
-- **`MetronomoUseCase`**: metrónomo provisional hecho con `noteOnEn` (clics agudos que
-  dispara C++ con precisión de muestra). Se puede sustituir por uno nativo sin tocar el ViewModel.
+- **`GestorMotorAudio`** (dominio, singleton): único dueño del stream y del foco de audio.
+  Carga el SoundFont una vez, cuenta cuántas pantallas lo usan, reintenta si el stream se
+  cae y avisa cuando otra app se queda con el audio.
+- **`MetronomoUseCase`**: enciende el metrónomo nativo mientras su corrutina vive.
+- **`PianoViewModel`**: un único dueño de la operación de transporte en curso (cada
+  comando cancela la anterior), probado en `TransporteViewModelTest`.
 - **Grabación**: cada toque toma el tick del reloj del motor, compensando la latencia de salida.
 - **Práctica**: `EvaluadorPractica` decide; el ViewModel traduce a `TransportStop` + `Seek`
   (pausa con las notas en la línea) y `TransportStart` (reanudar).
 
-### Archivos nuevos
+### Compilar y probar sin Android Studio
+
+El proyecto no trae `gradlew`. Con el Gradle 8.11.1 de `~/.gradle/wrapper/dists` y un JDK 21:
+
+```powershell
+$g = Get-ChildItem "$env:USERPROFILE\.gradle\wrapper\dists\gradle-8.11.1-bin" -Recurse -Filter gradle.bat | Select-Object -First 1 -ExpandProperty FullName
+$env:JAVA_HOME = "$env:USERPROFILE\.jdks\jbr-21.0.11"
+& $g --offline :app:testDebugUnitTest :app:assembleDebug --console=plain
+```
+
+Las bibliotecas nativas se enlazan para páginas de 16 KB (Android 15+): flags en
+`CMakeLists.txt` y Oboe 1.9.3, la primera versión con sus binarios alineados.
+
+### Archivos nuevos (primera fase)
+
+Los cambios de la ronda de mejoras de noviembre de 2026 están en `docs/INFORME_MEJORAS.md`.
 
 ```
 domain/audio/GestorMotorAudio.kt
@@ -103,7 +129,7 @@ assets/canciones/merry-go-round.txt
 app/src/test/.../LogicaDominioTest.kt
 ```
 
-### Archivos modificados
+### Archivos modificados (primera fase)
 
 | Archivo | Cambio |
 |---|---|
@@ -119,7 +145,8 @@ app/src/test/.../LogicaDominioTest.kt
 
 - **TinySoundFont** — MIT, © Bernhard Schelling.
 - **demo-florestan.sf2** — subconjunto Florestan del repositorio de TinySoundFont (MIT). Solo para pruebas.
-- **Oboe** — Apache 2.0, © Google.
+- **Oboe** 1.9.3 — Apache 2.0, © Google.
+- **Freeverb** (algoritmo de la reverberación, reimplementado en `Efectos.h`) — Jezar at Dreampoint, dominio público.
 - **Himno de la Alegría** — L. v. Beethoven (1824), dominio público.
 - **Merry-Go-Round of Life** — Joe Hisaishi (2004), obra protegida por derechos de autor.
   Transcripción aportada por el usuario para uso personal; antes de publicar la app
