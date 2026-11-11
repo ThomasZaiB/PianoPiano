@@ -99,6 +99,7 @@ import com.tuapp.piano.presentation.ui.practica.DialogoResultadoPractica
 import com.tuapp.piano.presentation.ui.theme.Espacio
 import com.tuapp.piano.presentation.ui.theme.EstiloMono
 import com.tuapp.piano.presentation.ui.theme.PianoColors
+import com.tuapp.piano.presentation.ui.theme.movimientoReducido
 import com.tuapp.piano.presentation.viewmodel.EstadoGrabacion
 import com.tuapp.piano.presentation.viewmodel.EstadoPractica
 import com.tuapp.piano.presentation.viewmodel.EventoPiano
@@ -123,6 +124,7 @@ fun PianoScreen(
     var confirmarSalida by remember { mutableStateOf(false) }
     val irABiblioteca by rememberUpdatedState(onIrABiblioteca)
     val textoGuardada = stringResource(R.string.piano_guardada)
+    val reducido = movimientoReducido()
 
     // Pantalla siempre encendida y barras del sistema ocultas mientras se toca.
     ModoInstrumento()
@@ -179,6 +181,7 @@ fun PianoScreen(
                         listener = object : PianoSurfaceView.Listener {
                             override fun onNoteOn(nota: Int, velocidad: Int, mano: Mano) = vm.noteOn(nota, mano, velocidad)
                             override fun onNoteOff(nota: Int, mano: Mano) = vm.noteOff(nota, mano)
+                            override fun onZoom(teclasVisibles: Int) = vm.fijarZoom(teclasVisibles)
                         }
                         fuenteReloj = vm::leerReloj
                     }.also { teclado = it }
@@ -191,6 +194,7 @@ fun PianoScreen(
                     vista.dinamicaTactil = ui.ajustes.dinamicaTactil
                     vista.sensibilidad = ui.ajustes.sensibilidad
                     vista.vibrarAlTocar = ui.ajustes.vibrarAlTocar
+                    vista.movimientoReducido = reducido
                     vista.compasesVisibles = ui.ajustes.velocidadCascada.compasesVisibles
                     vista.etiquetas = TecladoGeometria.etiquetas(ui.ajustes.notacion, ui.ajustes.etiquetas)
                 },

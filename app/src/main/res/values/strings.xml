@@ -38,6 +38,7 @@
     <string name="home_ver_todo">Ver todo</string>
 
     <!-- Ajustes -->
+    <string name="piano_teclado_descripcion">Teclado de piano de 88 teclas con la cascada de notas encima. Arrastra la cascada para moverte por el teclado y pellízcala para acercar o alejar.</string>
     <string name="ajustes_titulo">Ajustes</string>
     <string name="ajustes_seccion_teclado">Teclado</string>
     <string name="ajustes_seccion_cascada">Cascada</string>

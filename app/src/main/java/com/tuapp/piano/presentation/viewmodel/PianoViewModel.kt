@@ -418,6 +418,9 @@ class PianoViewModel @Inject constructor(
         ajustesRepo.actualizar { it.copy(teclasVisibles = it.teclasVisibles + delta) }
     }
 
+    /** Zoom elegido con un pellizco sobre la cascada; se guarda como el del menú. */
+    fun fijarZoom(teclas: Int) = ajustesRepo.actualizar { it.copy(teclasVisibles = teclas) }
+
     fun cambiarBpm(delta: Int) {
         // Un cambio manual deja el tempo en un entero (92,3 + 5 → 97).
         val bpm = (_ui.value.bpm.roundToInt() + delta).coerceIn(40, 240).toDouble()
