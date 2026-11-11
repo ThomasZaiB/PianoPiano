@@ -131,9 +131,24 @@ class PianoSurfaceView @JvmOverloads constructor(
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             if (!superficieLista) return
+            medirPeriodo(frameTimeNanos)
             renderizar(frameTimeNanos)
             Choreographer.getInstance().postFrameCallback(this)
         }
+    }
+
+    /**
+     * Periodo real del display. El frame se muestra ~1 vsync después de frameTimeNanos; a
+     * 90/120 Hz ese vsync dura 11/8 ms, no 16,7. Se mide con los propios frames (la
+     * frecuencia puede cambiar sola en pantallas adaptativas), suavizado. Solo hilo de render.
+     */
+    private var periodoVsyncNs = PERIODO_VSYNC_INICIAL_NS
+    private var ultimoFrameNs = 0L
+
+    private fun medirPeriodo(frameTimeNanos: Long) {
+        val delta = frameTimeNanos - ultimoFrameNs
+        ultimoFrameNs = frameTimeNanos
+        if (delta in PERIODO_MIN_NS..PERIODO_MAX_NS) periodoVsyncNs += (delta - periodoVsyncNs) / 8
     }
 
     init {
@@ -143,6 +158,9 @@ class PianoSurfaceView @JvmOverloads constructor(
 
     override fun surfaceCreated(holder: SurfaceHolder) {
         superficieLista = true
+        // Punto de partida razonable antes de medir: la frecuencia que anuncia el display.
+        display?.refreshRate?.takeIf { it > 1f }?.let { periodoVsyncNs = (1_000_000_000.0 / it).toLong() }
+        ultimoFrameNs = 0L
         val hilo = HandlerThread("PianoRender", Process.THREAD_PRIORITY_DISPLAY).also { it.start() }
         hiloRender = hilo
         // Choreographer es por hilo: obtenerlo DENTRO del hilo de render da vsync propio.
@@ -257,7 +275,7 @@ class PianoSurfaceView @JvmOverloads constructor(
         // frameTimeNanos = vsync; el frame se muestra ~1 vsync después; el audio
         // generado ahora sale por el altavoz `latencia` ms más tarde.
         fuenteReloj?.invoke(reloj)
-        val instante = frameTimeNanos + ADELANTO_DISPLAY_NS - (latenciaAudioMs * 1_000_000.0).toLong()
+        val instante = frameTimeNanos + periodoVsyncNs - (latenciaAudioMs * 1_000_000.0).toLong()
         val tick = max(0.0, reloj.tickAt(instante))
 
         val p = partitura
@@ -498,8 +516,16 @@ class PianoSurfaceView @JvmOverloads constructor(
                 val nueva = if (y >= topTeclado) notaEn(x + desplazamientoX, y) else -1
                 if (nueva != modo) {
                     soltar(modo)
-                    modoPuntero[id] = if (nueva >= 0) nueva else LIBRE
+                    // Fuera del teclado el dedo sigue "tocando": si vuelve a bajar, ataca la tecla.
+                    modoPuntero[id] = if (nueva >= 0) nueva else FUERA_DEL_TECLADO
                     if (nueva >= 0) pulsar(nueva, velocidadPara(nueva, y))
+                }
+            }
+            modo == FUERA_DEL_TECLADO -> if (y >= topTeclado) {
+                val nota = notaEn(x + desplazamientoX, y)
+                if (nota >= 0) {
+                    modoPuntero[id] = nota
+                    pulsar(nota, velocidadPara(nota, y))
                 }
             }
             modo == MINIMAPA -> saltarConMinimapa(x)
@@ -613,13 +639,19 @@ class PianoSurfaceView @JvmOverloads constructor(
         const val LIBRE = -1
         const val MINIMAPA = -2
         const val ARRASTRE = -3
+        /** Dedo que empezó en una tecla y salió hacia la cascada: sigue vivo para el glissando. */
+        const val FUERA_DEL_TECLADO = -4
         const val MIN_TECLAS_VISIBLES = 10
         const val VELOCIDAD_MIN = 45
         const val PROPORCION_TECLADO = 0.34f
         const val VELOCIDAD_FIJA = 100
         /** Límite de Android para la exclusión de gestos por borde (View.setSystemGestureExclusionRects). */
         const val MAX_EXCLUSION_DP = 200f
-        const val ADELANTO_DISPLAY_NS = 16_666_667L
+        /** Periodo inicial (60 Hz) hasta medir los primeros frames. */
+        const val PERIODO_VSYNC_INICIAL_NS = 16_666_667L
+        /** Deltas fuera de este rango son frames perdidos o pausas, no el periodo del display. */
+        const val PERIODO_MIN_NS = 4_000_000L
+        const val PERIODO_MAX_NS = 50_000_000L
 
         // Colores: salen de la misma Paleta que usa el tema de Compose.
         const val COLOR_FONDO = Paleta.FONDO.toInt()

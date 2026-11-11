@@ -53,14 +53,21 @@ class SemillasCallback(private val context: Context) : RoomDatabase.Callback() {
             val cancion = runCatching { crear() }
                 .onFailure { Log.e(TAG, "Canción incluida inválida: $clave", it) }
                 .getOrNull() ?: continue
-            db.beginTransaction()
+            // Una semilla que no se puede insertar no debe impedir abrir la base: una excepción
+            // que escapa de onOpen deja la base sin abrir en cada arranque, para siempre.
+            // Se registra y se sigue; no se marca como insertada, así que se reintenta.
             try {
-                insertar(db, cancion)
-                db.setTransactionSuccessful()
-                insertadas += clave
-                cambios = true
-            } finally {
-                db.endTransaction()
+                db.beginTransaction()
+                try {
+                    insertar(db, cancion)
+                    db.setTransactionSuccessful()
+                    insertadas += clave
+                    cambios = true
+                } finally {
+                    db.endTransaction()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "No se pudo insertar la canción incluida $clave", e)
             }
         }
         if (cambios) prefs.edit().putStringSet(CLAVE, insertadas).apply()

@@ -14,6 +14,7 @@ import com.tuapp.piano.domain.repository.ActividadRepository
 import com.tuapp.piano.domain.repository.AjustesRepository
 import com.tuapp.piano.domain.repository.AudioEngineRepository
 import com.tuapp.piano.domain.repository.CancionRepository
+import com.tuapp.piano.domain.repository.FocoAudioRepository
 import com.tuapp.piano.domain.usecase.GuardarGrabacionUseCase
 import com.tuapp.piano.domain.usecase.MetronomoUseCase
 import com.tuapp.piano.domain.usecase.ReproducirCancionUseCase
@@ -51,7 +52,9 @@ private class MotorFalso : AudioEngineRepository {
     @Volatile var corriendo = false
 
     override suspend fun cargarSoundFont() = Result.success("falso.sf2")
-    override fun iniciar() = true
+    @Volatile var abierto = true
+    @Volatile var puedeAbrir = true
+    override fun iniciar(): Boolean { abierto = puedeAbrir; return puedeAbrir }
     override fun detener() = Unit
     override fun noteOn(nota: Int, velocidad: Int, mano: Mano) = true
     override fun noteOff(nota: Int, mano: Mano) = true
@@ -72,6 +75,7 @@ private class MotorFalso : AudioEngineRepository {
     }
     override fun latenciaMs() = 10.0
     override fun xRuns() = 0
+    override fun streamAbierto() = abierto
 
     fun copia(): List<String> = synchronized(registro) { registro.toList() }
 }
@@ -92,6 +96,12 @@ private class RepositorioFalso : CancionRepository {
     override suspend fun marcarExportada(id: Long) = Unit
 }
 
+private class FocoFalso : FocoAudioRepository {
+    var alPerder: (() -> Unit)? = null
+    override fun solicitar(alPerder: () -> Unit): Boolean { this.alPerder = alPerder; return true }
+    override fun abandonar() = Unit
+}
+
 private class AjustesFalsos : AjustesRepository {
     override val ajustes = MutableStateFlow(Ajustes())
     override fun actualizar(cambio: (Ajustes) -> Ajustes) { ajustes.value = cambio(ajustes.value) }
@@ -108,6 +118,7 @@ class TransporteViewModelTest {
     private val planificador = TestCoroutineScheduler()
     private val principal = StandardTestDispatcher(planificador)
     private val motor = MotorFalso()
+    private val foco = FocoFalso()
 
     @Before fun antes() = Dispatchers.setMain(principal)
 
@@ -118,7 +129,7 @@ class TransporteViewModelTest {
         val vm = PianoViewModel(
             savedStateHandle = SavedStateHandle(mapOf(Rutas.ARG_MODO to modo.name, Rutas.ARG_CANCION_ID to cancionId)),
             motor = motor,
-            gestor = GestorMotorAudio(motor),
+            gestor = GestorMotorAudio(motor, foco),
             repositorio = repo,
             reproducirCancion = ReproducirCancionUseCase(motor),
             metronomoUseCase = MetronomoUseCase(motor),
@@ -250,5 +261,57 @@ class TransporteViewModelTest {
         vm.onStop()
         assertEquals("pedal false", motor.copia().last { it.startsWith("pedal") })
         assertFalse(vm.ui.value.pedalAbajo)
+    }
+}
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class FocoYStreamTest {
+    private val planificador = TestCoroutineScheduler()
+    private val motor = MotorFalso()
+    private val foco = FocoFalso()
+
+    @Before fun antes() = Dispatchers.setMain(StandardTestDispatcher(planificador))
+
+    @After fun despues() = Dispatchers.resetMain()
+
+    @Test fun perderElFoco_pausaLaReproduccion() {
+        val repo = RepositorioFalso()
+        val vm = PianoViewModel(
+            savedStateHandle = SavedStateHandle(mapOf(Rutas.ARG_MODO to ModoPiano.REPRODUCIR.name, Rutas.ARG_CANCION_ID to 1L)),
+            motor = motor,
+            gestor = GestorMotorAudio(motor, foco),
+            repositorio = repo,
+            reproducirCancion = ReproducirCancionUseCase(motor),
+            metronomoUseCase = MetronomoUseCase(motor),
+            guardarGrabacion = GuardarGrabacionUseCase(repo),
+            ajustesRepo = AjustesFalsos(),
+            actividad = ActividadFalsa(),
+        )
+        vm.onStart()
+        repeat(600) {
+            planificador.advanceTimeBy(5); planificador.runCurrent()
+            if (vm.ui.value.motorListo && vm.ui.value.cancion != null) return@repeat
+            Thread.sleep(2)
+        }
+        repeat(40) { planificador.advanceTimeBy(5); planificador.runCurrent() }
+        vm.alternarReproduccion()
+        repeat(40) { planificador.advanceTimeBy(5); planificador.runCurrent() }
+        assertTrue(vm.ui.value.reproduciendo)
+        foco.alPerder!!.invoke() // llamada entrante
+        repeat(10) { planificador.advanceTimeBy(5); planificador.runCurrent() }
+        assertFalse(vm.ui.value.reproduciendo)
+        assertFalse(motor.corriendo)
+    }
+
+    @Test fun streamCaidoSinReapertura_pasaAError() = kotlinx.coroutines.runBlocking {
+        val gestor = GestorMotorAudio(motor, foco)
+        assertTrue(gestor.adquirir())
+        motor.abierto = false
+        motor.puedeAbrir = false
+        gestor.vigilarStream()
+        assertEquals(com.tuapp.piano.domain.model.EstadoMotor.ERROR, gestor.estado.value)
+        motor.puedeAbrir = true
+        gestor.vigilarStream()
+        assertEquals(com.tuapp.piano.domain.model.EstadoMotor.SONANDO, gestor.estado.value)
     }
 }

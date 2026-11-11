@@ -123,16 +123,28 @@ void AudioEngine::closeLocked() {
     mPlayer.resetSustain();
 }
 
-void AudioEngine::onErrorAfterClose(oboe::AudioStream * /*stream*/, oboe::Result error) {
+void AudioEngine::onErrorAfterClose(oboe::AudioStream *stream, oboe::Result error) {
     // Se llama en un hilo propio de Oboe, NO en el hilo de audio. Caso típico:
     // el usuario conecta/desconecta auriculares o Bluetooth (ErrorDisconnected).
     LOGW("Stream cerrado por error: %s", oboe::convertToText(error));
     std::lock_guard<std::mutex> lock(mControlMutex);
+    // El aviso puede llegar tarde: si entre el error y este callback hubo stop() + start()
+    // (la app pasó por segundo plano), mStream ya es otro stream sano y no hay que tocarlo.
+    if (mStream.get() != stream) {
+        LOGI("Error de un stream antiguo: se ignora");
+        return;
+    }
     mStream.reset();
     if (mWantRunning && error == oboe::Result::ErrorDisconnected) {
         LOGI("Reabriendo stream en el nuevo dispositivo de salida…");
-        openAndStartLocked();
+        // Si falla, mStream queda vacío: isStreamOpen() lo delata y Kotlin reintenta.
+        if (!openAndStartLocked()) LOGE("No se pudo reabrir el stream");
     }
+}
+
+bool AudioEngine::isStreamOpen() {
+    std::lock_guard<std::mutex> lock(mControlMutex);
+    return mStream != nullptr;
 }
 
 bool AudioEngine::postEvent(const EngineEvent &event) {

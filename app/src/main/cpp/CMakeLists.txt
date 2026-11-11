@@ -22,12 +22,21 @@ target_include_directories(pianoengine SYSTEM PRIVATE
 
 # Optimización agresiva siempre en el código de audio, incluso en Debug:
 # un callback lento en Debug genera glitches que confunden al depurar.
+# Debug conserva los símbolos (-g) para poder depurar; solo Release los elimina.
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
     target_compile_options(pianoengine PRIVATE -O3 -ffunction-sections -fdata-sections)
+    target_link_options(pianoengine PRIVATE -Wl,--gc-sections -Wl,--strip-all)
 else ()
     target_compile_options(pianoengine PRIVATE -O2 -g)
-    target_link_options(pianoengine PRIVATE -Wl,--gc-sections -Wl,--strip-all)
 endif ()
+
+# Android 15+ admite dispositivos con páginas de 16 KB y Google Play lo exige a las apps
+# con targetSdk 35. NDK r27 todavía alinea a 4 KB por defecto (r28 ya lo hace a 16 KB):
+# https://developer.android.com/guide/practices/page-sizes#compile-r27-lower
+target_link_options(pianoengine PRIVATE
+        "-Wl,-z,max-page-size=16384"
+        "-Wl,-z,common-page-size=16384"
+)
 
 target_link_libraries(pianoengine
         oboe::oboe

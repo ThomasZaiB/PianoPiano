@@ -37,4 +37,7 @@ interface AudioEngineRepository {
     // Diagnóstico
     fun latenciaMs(): Double
     fun xRuns(): Int
+
+    /** false si el stream se cayó (p. ej. al cambiar de auriculares) y no se pudo reabrir. Bloqueante (µs). */
+    fun streamAbierto(): Boolean
 }

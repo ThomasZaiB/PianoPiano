@@ -98,7 +98,8 @@ data class PianoUiState(
     // Canción y vista
     val cargandoCancion: Boolean = false,
     val cancion: Cancion? = null,
-    val bpm: Int = 100,
+    /** Única fuente del tempo: la UI, la barra de progreso y el motor leen este valor (puede tener decimales: MIDI importado). */
+    val bpm: Double = 100.0,
     val compas: Compas = Compas(),
     val pedalAbajo: Boolean = false,
     val teclasVisibles: Int = 21,
@@ -174,7 +175,7 @@ class PianoViewModel @Inject constructor(
     private val _ui = MutableStateFlow(
         PianoUiState(
             modo = modo,
-            bpm = config.bpm,
+            bpm = config.bpm.toDouble(),
             compas = config.compas,
             metronomo = config.metronomo,
             cargandoCancion = cancionId > 0,
@@ -237,6 +238,10 @@ class PianoViewModel @Inject constructor(
         viewModelScope.launch {
             ajustesRepo.ajustes.collect { a -> _ui.update { it.copy(ajustes = a, teclasVisibles = a.teclasVisibles) } }
         }
+        viewModelScope.launch {
+            // Llamada entrante u otra app de música: se pausa todo, como al ir a segundo plano.
+            gestor.focoPerdido.collect { if (adquirido) detenerTodo() }
+        }
         if (cancionId > 0) cargarCancion()
     }
 
@@ -284,7 +289,7 @@ class PianoViewModel @Inject constructor(
     }
 
     private suspend fun prepararMotor() {
-        motor.setTempo(_ui.value.bpm.toDouble())
+        motor.setTempo(_ui.value.bpm)
         if (primeraPreparacion) {
             // El motor es compartido: otra pantalla pudo dejarlo en cualquier posición.
             primeraPreparacion = false
@@ -297,7 +302,11 @@ class PianoViewModel @Inject constructor(
             trabajoDiagnostico = viewModelScope.launch {
                 while (isActive) {
                     if (adquirido) {
-                        val (lat, xr) = withContext(Dispatchers.IO) { motor.latenciaMs() to motor.xRuns() }
+                        val (lat, xr) = withContext(Dispatchers.IO) {
+                            // Si el stream se cayó sin reabrirse, el gestor reintenta o pasa a ERROR.
+                            gestor.vigilarStream()
+                            motor.latenciaMs() to motor.xRuns()
+                        }
                         _ui.update { it.copy(latenciaMs = lat.takeIf { v -> v >= 0 }, xRuns = xr.takeIf { v -> v >= 0 }) }
                     }
                     delay(1_000)
@@ -355,7 +364,7 @@ class PianoViewModel @Inject constructor(
                 it.copy(
                     cargandoCancion = false,
                     cancion = cancion,
-                    bpm = cancion.bpm.roundToInt(),
+                    bpm = cancion.bpm,
                     compas = cancion.compas,
                     tituloSugerido = cancion.titulo,
                     totalCompases = SeleccionPractica.totalCompases(cancion),
@@ -365,7 +374,8 @@ class PianoViewModel @Inject constructor(
             // Para que el inicio ofrezca seguir con esta canción (editarla no cuenta como "tocarla").
             if (modo == ModoPiano.REPRODUCIR || modo == ModoPiano.PRACTICA) actividad.registrarApertura(cancion.id, modo)
             actualizarPracticaUi()
-            if (adquirido) motor.setTempo(cancion.bpm)
+            // Se envía el mismo valor que guarda la UI: prepararMotor también lo lee de ahí.
+            if (adquirido) motor.setTempo(_ui.value.bpm)
             // Eventos ordenados listos antes del primer Play (en práctica se prepara el acompañamiento).
             if (modo != ModoPiano.PRACTICA) reproducirCancion.preparar(cancion)
         }
@@ -403,8 +413,9 @@ class PianoViewModel @Inject constructor(
     }
 
     fun cambiarBpm(delta: Int) {
-        val bpm = (_ui.value.bpm + delta).coerceIn(40, 240)
-        motor.setTempo(bpm.toDouble())
+        // Un cambio manual deja el tempo en un entero (92,3 + 5 → 97).
+        val bpm = (_ui.value.bpm.roundToInt() + delta).coerceIn(40, 240).toDouble()
+        motor.setTempo(bpm)
         _ui.update { it.copy(bpm = bpm) }
     }
 
@@ -483,7 +494,7 @@ class PianoViewModel @Inject constructor(
     /** Botón flotante de LIBRE: prepara una toma y empieza a grabar al instante. */
     fun grabarRapido() {
         if (_ui.value.grabacion != EstadoGrabacion.INACTIVA) return
-        config = config.copy(bpm = _ui.value.bpm)
+        config = config.copy(bpm = _ui.value.bpm.roundToInt())
         _ui.update { it.copy(grabacion = EstadoGrabacion.LISTA) }
         grabar()
     }
@@ -570,7 +581,7 @@ class PianoViewModel @Inject constructor(
                 guardarGrabacion(
                     titulo = titulo,
                     notasGrabadas = notas,
-                    config = config.copy(bpm = _ui.value.bpm, compas = _ui.value.compas),
+                    config = config.copy(bpm = _ui.value.bpm.roundToInt(), compas = _ui.value.compas),
                     cancionExistenteId = existente,
                 )
             }.onSuccess { id ->
@@ -879,6 +890,7 @@ class PianoViewModel @Inject constructor(
     }
 
     private fun arrancarMotorTransporte() {
+        gestor.asegurarFoco()
         motor.transporteIniciar()
         transporteCorriendo = true
         // A partir de aquí la posición la lleva el reloj del motor (el Seek, si lo había, va antes en su cola).

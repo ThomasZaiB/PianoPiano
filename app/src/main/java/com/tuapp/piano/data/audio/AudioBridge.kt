@@ -89,6 +89,7 @@ class AudioBridge @Inject constructor(
 
     override fun latenciaMs(): Double = nativeGetLatencyMillis()
     override fun xRuns(): Int = nativeGetXRunCount()
+    override fun streamAbierto(): Boolean = nativeIsStreamOpen()
 
     private fun post(tipo: Int, canal: Int = 0, nota: Int = 0, velocidad: Int = 1, valor: Double = 0.0) =
         nativePostEvent(tipo, canal, nota, velocidad, valor)
@@ -102,6 +103,7 @@ class AudioBridge @Inject constructor(
     private external fun nativeReadClock(longs: LongArray, doubles: DoubleArray)
     private external fun nativeGetLatencyMillis(): Double
     private external fun nativeGetXRunCount(): Int
+    private external fun nativeIsStreamOpen(): Boolean
 
     companion object {
         // Deben coincidir con enum class EventType en EngineEvent.h

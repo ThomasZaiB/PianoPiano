@@ -105,4 +105,8 @@ JNIEXPORT jint JNICALL JNI_FN(nativeGetXRunCount)(JNIEnv *, jobject) {
     return engine().xRunCount();
 }
 
+JNIEXPORT jboolean JNICALL JNI_FN(nativeIsStreamOpen)(JNIEnv *, jobject) {
+    return engine().isStreamOpen() ? JNI_TRUE : JNI_FALSE;
+}
+
 } // extern "C"

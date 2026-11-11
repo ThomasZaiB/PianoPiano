@@ -51,6 +51,9 @@ public:
     /** Número de underruns (cortes) desde que se abrió el stream; -1 si no aplica. */
     int32_t xRunCount();
 
+    /** true si hay stream abierto (false tras un error de dispositivo sin reapertura). */
+    bool isStreamOpen();
+
     // ---- Callbacks de Oboe ----
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *stream, void *audioData,
                                           int32_t numFrames) override;

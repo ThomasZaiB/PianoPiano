@@ -640,7 +640,7 @@ private fun GrupoTempo(ui: PianoUiState, vm: PianoViewModel, habilitado: Boolean
     Grupo {
         BotonIcono(Icons.Filled.Remove, stringResource(R.string.bpm_menos), habilitado = habilitado) { vm.cambiarBpm(-5) }
         Text(
-            stringResource(R.string.bpm_valor, ui.bpm),
+            stringResource(R.string.bpm_valor, ui.bpm.roundToInt()),
             color = if (habilitado) PianoColors.Texto else PianoColors.TextoSecundario,
             style = MaterialTheme.typography.labelMedium,
         )
