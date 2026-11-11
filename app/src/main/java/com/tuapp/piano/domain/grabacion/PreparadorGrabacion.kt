@@ -12,7 +12,8 @@ object PreparadorGrabacion {
      * 1) Cuantiza.
      * 2) Solo para canciones nuevas: quita el silencio inicial dejando exactamente un
      *    compás vacío antes de la primera nota (para que en la cascada "caiga" desde arriba),
-     *    conservando la posición de la nota dentro de su compás.
+     *    conservando la posición de la nota dentro de su compás. Si la primera nota cae en
+     *    el compás 0, se desplaza todo un compás hacia delante para dejar ese hueco.
      *    En un overdub no se mueve nada: las notas nuevas deben cuadrar con las existentes.
      */
     fun preparar(
@@ -27,7 +28,8 @@ object PreparadorGrabacion {
         val ticksPorCompas = compas.ticksPorCompas.toLong()
         val compasPrimeraNota = cuantizadas.first().tickInicio / ticksPorCompas
         val desplazamiento = (compasPrimeraNota - 1) * ticksPorCompas
-        return if (desplazamiento > 0) {
+        // Primera nota ya en el compás 0 (sin cuenta de entrada): se añade el compás vacío.
+        return if (desplazamiento != 0L) {
             cuantizadas.map { it.copy(tickInicio = it.tickInicio - desplazamiento) }
         } else {
             cuantizadas

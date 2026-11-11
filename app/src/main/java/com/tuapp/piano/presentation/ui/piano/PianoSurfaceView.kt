@@ -311,7 +311,7 @@ class PianoSurfaceView @JvmOverloads constructor(
         if (anchoVista == 0) return
         anchoBlanca = anchoVista.toFloat() / zoomActual
         altoMinimapa = 22f * densidad
-        altoTeclado = (altoVista * PROPORCION_TECLADO).coerceIn(110f * densidad, 260f * densidad)
+        altoTeclado = G.altoTecladoDp(altoVista / densidad) * densidad
         topTeclado = altoVista - altoTeclado
     }
 
@@ -1082,7 +1082,6 @@ class PianoSurfaceView @JvmOverloads constructor(
         /** Dedo que empezó en una tecla y salió hacia la cascada: sigue vivo para el glissando. */
         const val FUERA_DEL_TECLADO = -4
         const val MIN_TECLAS_VISIBLES = 10
-        const val PROPORCION_TECLADO = 0.34f
         const val VELOCIDAD_FIJA = 100
         /** Límite de Android para la exclusión de gestos por borde (View.setSystemGestureExclusionRects). */
         const val MAX_EXCLUSION_DP = 200f

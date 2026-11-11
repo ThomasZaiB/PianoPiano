@@ -37,10 +37,10 @@ class HomeViewModel @Inject constructor(
             .map { HomeUiState(cargando = false, inicio = it) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
-    private val _mensajes = Channel<String>(Channel.BUFFERED)
-    val mensajes: Flow<String> = _mensajes.receiveAsFlow()
+    private val _mensajes = Channel<ResultadoImportacionMidi>(Channel.BUFFERED)
+    val mensajes: Flow<ResultadoImportacionMidi> = _mensajes.receiveAsFlow()
 
     fun importarMidi(bytes: ByteArray, nombreArchivo: String?) {
-        viewModelScope.launch { _mensajes.send(importarMidiConMensaje(importarMidiUseCase, bytes, nombreArchivo)) }
+        viewModelScope.launch { _mensajes.send(importarMidiConResultado(importarMidiUseCase, bytes, nombreArchivo)) }
     }
 }

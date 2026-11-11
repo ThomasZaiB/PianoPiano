@@ -86,11 +86,23 @@
 
     <!-- Biblioteca -->
     <string name="biblioteca_titulo">Biblioteca</string>
+    <string name="biblioteca_filtro_todas">Todas</string>
+    <string name="biblioteca_filtro_creadas">Creadas</string>
+    <string name="biblioteca_filtro_exportadas">Exportadas</string>
+    <string name="biblioteca_buscar">Buscar por título</string>
+    <string name="biblioteca_buscar_limpiar">Borrar la búsqueda</string>
+    <string name="biblioteca_sin_resultados">Ninguna canción se llama «%1$s»</string>
+    <string name="biblioteca_borrada">«%1$s» borrada</string>
+    <string name="biblioteca_error_borrar">No se pudo borrar: %1$s</string>
+    <string name="biblioteca_exportada">Archivo MIDI guardado</string>
+    <string name="biblioteca_error_exportar">No se pudo exportar: %1$s</string>
+    <string name="accion_deshacer">Deshacer</string>
+    <string name="midi_importada">«%1$s» importada · %2$s</string>
+    <string name="midi_importada_descartadas"> (%1$d fuera del piano o de percusión, omitidas)</string>
+    <string name="midi_error_importar">No se pudo importar: %1$s</string>
     <string name="biblioteca_importar">Importar</string>
     <string name="biblioteca_nueva">Nueva canción</string>
     <string name="biblioteca_filtro">%1$s (%2$d)</string>
-    <string name="biblioteca_borrar_titulo">¿Borrar canción?</string>
-    <string name="biblioteca_borrar_texto">«%1$s» (%2$s) se borrará. No se puede deshacer.</string>
     <string name="biblioteca_etiqueta_midi">MIDI</string>
     <string name="biblioteca_detalle">%1$d BPM · %2$s · %3$s · %4$s</string>
     <string name="biblioteca_practicar">Practicar</string>
@@ -143,6 +155,15 @@
     <string name="piano_acercar">Acercar</string>
     <string name="piano_pedal">Pedal</string>
     <string name="piano_error_audio">Error de audio</string>
+    <string name="piano_error_soundfont">No se pudo cargar el sonido del piano</string>
+    <string name="piano_error_stream">No se pudo abrir la salida de audio</string>
+    <string name="piano_error_salida">Se perdió la salida de audio; reintentando…</string>
+    <string name="piano_msg_no_encontrada">No se encontró la canción</string>
+    <string name="piano_msg_toma_vacia">No se grabó ninguna nota</string>
+    <string name="piano_msg_error_guardar">No se pudo guardar: %1$s</string>
+    <string name="piano_titulo_por_defecto">Mi canción %1$s</string>
+    <string name="piano_practica_error">%1$s ✗  (esperaba %2$s)</string>
+    <string name="piano_cuenta_descripcion">Cuenta de entrada: %1$d</string>
     <string name="piano_pausa">Pausa</string>
     <string name="piano_reproducir">Reproducir</string>
     <string name="piano_volver_inicio">Volver al inicio</string>
@@ -157,7 +178,7 @@
     <string name="piano_practica_pausa">En pausa</string>
     <string name="piano_practica_siguiente">Siguiente: %1$s</string>
     <string name="piano_practica_marcador">✓ %1$d   ✗ %2$d   %3$d %%</string>
-    <string name="piano_rec">● REC  %1$s</string>
+    <string name="piano_rec">REC  %1$s</string>
     <string name="piano_rec_pausa">En pausa  ·  %1$s</string>
     <string name="piano_rec_lista">Listo para grabar</string>
     <string name="piano_modo_libre">Tocar libremente</string>

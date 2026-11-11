@@ -19,6 +19,18 @@ internal object TecladoGeometria {
     const val PROPORCION_ANCHO_NEGRA = 0.6f
     const val PROPORCION_ALTO_NEGRA = 0.62f
 
+    /** Parte de la vista que ocupa el teclado, con sus límites en dp. */
+    private const val PROPORCION_TECLADO = 0.34f
+    private const val ALTO_TECLADO_MIN_DP = 110f
+    private const val ALTO_TECLADO_MAX_DP = 260f
+
+    /**
+     * Alto del teclado para una vista de [altoVistaDp]. Lo usan la vista (para dibujar) y
+     * Compose (para colocar rótulos justo encima de la línea de impacto).
+     */
+    fun altoTecladoDp(altoVistaDp: Float): Float =
+        (altoVistaDp * PROPORCION_TECLADO).coerceIn(ALTO_TECLADO_MIN_DP, ALTO_TECLADO_MAX_DP)
+
     private val NEGRAS_EN_OCTAVA = intArrayOf(1, 3, 6, 8, 10)
 
     val esNegra = BooleanArray(128) { n -> (n % 12) in NEGRAS_EN_OCTAVA }

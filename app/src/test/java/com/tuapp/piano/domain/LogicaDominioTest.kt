@@ -86,6 +86,12 @@ class GrabadorYPreparadorTest {
     @Test fun cancionNueva_quitaElSilencioInicialDejandoUnCompas() {
         val r = PreparadorGrabacion.preparar(listOf(n(60, 3 * 3840 + 965, 400)), Compas(4, 4), Cuantizacion.SEMICORCHEA, false, esCancionNueva = true)
         assertEquals(3840L + 960, r.single().tickInicio)
+        // Con la cuenta de entrada la primera nota cae en el compás 1: se queda donde está.
+        val conCuenta = PreparadorGrabacion.preparar(listOf(n(60, 3840 + 965, 400)), Compas(4, 4), Cuantizacion.SEMICORCHEA, false, esCancionNueva = true)
+        assertEquals(3840L + 960, conCuenta.single().tickInicio)
+        // Primera nota en el compás 0: se añade el compás vacío de preparación.
+        val sinHueco = PreparadorGrabacion.preparar(listOf(n(60, 965, 400), n(62, 1925, 400)), Compas(4, 4), Cuantizacion.SEMICORCHEA, false, esCancionNueva = true)
+        assertEquals(listOf(3840L + 960, 3840L + 1920), sinHueco.map { it.tickInicio })
     }
 
     @Test fun overdub_noDesplazaLasNotas() {

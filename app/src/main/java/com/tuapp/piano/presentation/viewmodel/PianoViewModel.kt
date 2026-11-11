@@ -10,6 +10,7 @@ import com.tuapp.piano.domain.model.Cancion
 import com.tuapp.piano.domain.model.Compas
 import com.tuapp.piano.domain.model.ConfigGrabacion
 import com.tuapp.piano.domain.model.Cuantizacion
+import com.tuapp.piano.domain.model.ErrorMotor
 import com.tuapp.piano.domain.model.EstadoMotor
 import com.tuapp.piano.domain.model.Mano
 import com.tuapp.piano.domain.model.ModoPiano
@@ -48,8 +49,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import kotlin.math.abs
 import kotlin.math.max
@@ -81,7 +80,7 @@ data class PracticaUi(
     val mejorRacha: Int = 0,
     /** Vuelta actual cuando se repite un tramo en bucle (empieza en 1). */
     val vuelta: Int = 1,
-    val ultimoError: String? = null,
+    val ultimoError: ErrorPractica? = null,
     /** Cambia con cada error para que la UI pueda hacer un destello aunque el texto se repita. */
     val idError: Int = 0,
 )
@@ -92,7 +91,7 @@ data class PianoUiState(
     val estadoMotor: EstadoMotor = EstadoMotor.CARGANDO,
     val motorListo: Boolean = false,
     val soundFont: String? = null,
-    val error: String? = null,
+    val error: ErrorMotor? = null,
     val latenciaMs: Double? = null,
     val xRuns: Int? = null,
     // Canción y vista
@@ -111,7 +110,12 @@ data class PianoUiState(
     val notasGrabadas: Int = 0,
     val metronomo: Boolean = true,
     val dialogoGuardar: Boolean = false,
+    /** Canción nueva arrancando: la pantalla cuenta 4-3-2-1 durante el primer compás. */
+    val cuentaEntrada: Boolean = false,
+    /** Vacío en una canción nueva: la pantalla propone "Mi canción" con la fecha local. */
     val tituloSugerido: String = "",
+    /** Cambia con cada Seek: la barra de progreso relee el reloj aunque el transporte esté parado. */
+    val saltos: Int = 0,
     val guardando: Boolean = false,
     // PRACTICA
     val practica: PracticaUi = PracticaUi(),
@@ -125,8 +129,18 @@ data class PianoUiState(
 /** Resultado de una pulsación en práctica: el teclado lo muestra como un destello verde o rojo. */
 data class ResultadoTecla(val nota: Int, val acierto: Boolean)
 
+/** Nota equivocada en práctica: la pantalla la escribe con la notación elegida. */
+data class ErrorPractica(val tocada: Int, val esperadas: Set<Int>)
+
+/** Avisos de la pantalla del piano. El texto lo pone la pantalla (strings.xml). */
+sealed interface MensajePiano {
+    data object CancionNoEncontrada : MensajePiano
+    data object TomaVacia : MensajePiano
+    data class ErrorAlGuardar(val detalle: String?) : MensajePiano
+}
+
 sealed interface EventoPiano {
-    data class Mensaje(val texto: String) : EventoPiano
+    data class Mensaje(val mensaje: MensajePiano) : EventoPiano
 
     /** [volverABiblioteca]: en modo GRABAR se navega a la biblioteca; en "Grabar rápido" no. */
     data class Guardada(val id: Long, val volverABiblioteca: Boolean) : EventoPiano
@@ -339,6 +353,7 @@ class PianoViewModel @Inject constructor(
                 reproduciendo = false,
                 pedalAbajo = false,
                 grabacion = if (s.grabacion == EstadoGrabacion.GRABANDO) EstadoGrabacion.PAUSADA else s.grabacion,
+                cuentaEntrada = false,
                 notasGrabadas = grabador.cantidad,
                 practica = if (s.practica.estado == EstadoPractica.EN_CURSO) {
                     s.practica.copy(estado = EstadoPractica.PAUSADA)
@@ -354,7 +369,7 @@ class PianoViewModel @Inject constructor(
             val cancion = runCatching { repositorio.obtener(cancionId) }.getOrNull()
             if (cancion == null) {
                 _ui.update { it.copy(cargandoCancion = false) }
-                _eventos.send(EventoPiano.Mensaje("No se encontró la canción"))
+                _eventos.send(EventoPiano.Mensaje(MensajePiano.CancionNoEncontrada))
                 return@launch
             }
             if (modo == ModoPiano.GRABAR) {
@@ -526,7 +541,9 @@ class PianoViewModel @Inject constructor(
             else -> return
         }
         // GRABANDO desde ya: Pausa y Detener funcionan también durante el arranque.
-        _ui.update { it.copy(grabacion = EstadoGrabacion.GRABANDO, notasGrabadas = grabador.cantidad) }
+        // Cuenta de entrada solo en canciones nuevas desde el principio (no en overdub ni al reanudar).
+        val cuenta = s.grabacion == EstadoGrabacion.LISTA && modo == ModoPiano.GRABAR && s.cancion == null
+        _ui.update { it.copy(grabacion = EstadoGrabacion.GRABANDO, notasGrabadas = grabador.cantidad, cuentaEntrada = cuenta) }
     }
 
     /** Acompañamiento (canción existente en overdub + metrónomo) y arranque del reloj. */
@@ -554,7 +571,7 @@ class PianoViewModel @Inject constructor(
         cancelarOperacion()
         grabador.cerrarTodas(tickActual().toLong())
         pararMotorTransporte()
-        _ui.update { it.copy(grabacion = EstadoGrabacion.PAUSADA, notasGrabadas = grabador.cantidad) }
+        _ui.update { it.copy(grabacion = EstadoGrabacion.PAUSADA, notasGrabadas = grabador.cantidad, cuentaEntrada = false) }
     }
 
     fun detenerGrabacion() {
@@ -562,11 +579,10 @@ class PianoViewModel @Inject constructor(
         if (_ui.value.grabacion != EstadoGrabacion.PAUSADA) return
         if (grabador.estaVacio) {
             terminarToma()
-            viewModelScope.launch { _eventos.send(EventoPiano.Mensaje("No se grabó ninguna nota")) }
+            viewModelScope.launch { _eventos.send(EventoPiano.Mensaje(MensajePiano.TomaVacia)) }
             return
         }
-        val sugerido = _ui.value.cancion?.titulo
-            ?: "Mi canción " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("d/M HH:mm"))
+        val sugerido = _ui.value.cancion?.titulo.orEmpty()
         _ui.update { it.copy(dialogoGuardar = true, tituloSugerido = sugerido) }
     }
 
@@ -600,7 +616,7 @@ class PianoViewModel @Inject constructor(
                 _eventos.send(EventoPiano.Guardada(id, volverABiblioteca = modo == ModoPiano.GRABAR))
             }.onFailure { e ->
                 _ui.update { it.copy(guardando = false) }
-                _eventos.send(EventoPiano.Mensaje("No se pudo guardar: ${e.message}"))
+                _eventos.send(EventoPiano.Mensaje(MensajePiano.ErrorAlGuardar(e.message)))
             }
         }
     }
@@ -612,6 +628,7 @@ class PianoViewModel @Inject constructor(
         _ui.update {
             it.copy(
                 dialogoGuardar = false,
+                cuentaEntrada = false,
                 guardando = false,
                 notasGrabadas = 0,
                 grabacion = if (modo == ModoPiano.LIBRE) EstadoGrabacion.INACTIVA else EstadoGrabacion.LISTA,
@@ -783,14 +800,12 @@ class PianoViewModel @Inject constructor(
                 }
             }
             EvaluadorPractica.Resultado.ERROR -> {
-                val notacion = _ui.value.ajustes.notacion
-                val esperadas = grupo?.let { NombresNotas.lista(it.notas, notacion) } ?: ""
-                val texto = "${NombresNotas.nombre(nota, notacion)} ✗  (esperaba $esperadas)"
+                val error = ErrorPractica(nota, grupo?.notas ?: emptySet())
                 if (!estabaEsperando && grupo != null) {
                     // Parar donde está la música (o en el grupo, si ya llegó a la línea).
                     esperarEn(min(tickActual(), grupo.tick.toDouble()))
                 }
-                _ui.update { it.copy(practica = it.practica.copy(ultimoError = texto, idError = it.practica.idError + 1)) }
+                _ui.update { it.copy(practica = it.practica.copy(ultimoError = error, idError = it.practica.idError + 1)) }
                 actualizarPracticaUi()
             }
             EvaluadorPractica.Resultado.ACIERTO -> actualizarPracticaUi()
@@ -861,6 +876,7 @@ class PianoViewModel @Inject constructor(
     private fun pedirSalto(tick: Double) {
         destinoSalto = tick
         motor.irATick(tick)
+        _ui.update { it.copy(saltos = it.saltos + 1) }
     }
 
     /**

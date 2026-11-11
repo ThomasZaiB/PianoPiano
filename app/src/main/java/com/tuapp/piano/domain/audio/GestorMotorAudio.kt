@@ -1,5 +1,6 @@
 package com.tuapp.piano.domain.audio
 
+import com.tuapp.piano.domain.model.ErrorMotor
 import com.tuapp.piano.domain.model.EstadoMotor
 import com.tuapp.piano.domain.repository.AudioEngineRepository
 import com.tuapp.piano.domain.repository.FocoAudioRepository
@@ -49,8 +50,8 @@ class GestorMotorAudio @Inject constructor(
     private val _soundFont = MutableStateFlow<String?>(null)
     val soundFont: StateFlow<String?> = _soundFont.asStateFlow()
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _error = MutableStateFlow<ErrorMotor?>(null)
+    val error: StateFlow<ErrorMotor?> = _error.asStateFlow()
 
     private val _focoPerdido = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
@@ -71,7 +72,7 @@ class GestorMotorAudio @Inject constructor(
             val resultado = motor.cargarSoundFont()
             val nombre = resultado.getOrNull()
             if (nombre == null) {
-                _error.value = resultado.exceptionOrNull()?.message ?: "No se pudo cargar el SoundFont"
+                _error.value = ErrorMotor.SOUNDFONT
                 _estado.value = EstadoMotor.ERROR
                 return@withLock false
             }
@@ -81,7 +82,7 @@ class GestorMotorAudio @Inject constructor(
         if (usuarios == 0) {
             val ok = withContext(Dispatchers.IO) { motor.iniciar() }
             if (!ok) {
-                _error.value = "No se pudo abrir el stream de audio"
+                _error.value = ErrorMotor.STREAM
                 _estado.value = EstadoMotor.ERROR
                 return@withLock false
             }
@@ -113,7 +114,7 @@ class GestorMotorAudio @Inject constructor(
             _error.value = null
             _estado.value = EstadoMotor.SONANDO
         } else {
-            _error.value = "Se perdió la salida de audio; reintentando…"
+            _error.value = ErrorMotor.SALIDA_PERDIDA
             _estado.value = EstadoMotor.ERROR
         }
     }

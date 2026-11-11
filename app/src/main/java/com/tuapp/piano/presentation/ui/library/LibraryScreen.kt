@@ -1,5 +1,14 @@
 package com.tuapp.piano.presentation.ui.library
 
+import com.tuapp.piano.presentation.ui.common.textoImportacionMidi
+import com.tuapp.piano.presentation.viewmodel.MensajeBiblioteca
+import java.time.format.FormatStyle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.animateColorAsState
 import androidx.activity.result.contract.ActivityResultContracts
@@ -94,7 +103,9 @@ import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
-private val FORMATO_FECHA = DateTimeFormatter.ofPattern("d MMM yyyy · HH:mm", Locale.forLanguageTag("es"))
+/** Fecha y hora con el formato del idioma del teléfono (antes estaba fijado a español). */
+private fun formatoFecha(): DateTimeFormatter =
+    DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withLocale(Locale.getDefault())
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,7 +118,6 @@ fun LibraryScreen(
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-    var porBorrar by remember { mutableStateOf<ResumenCancion?>(null) }
 
     // Exportar: guardamos qué canción se pidió y abrimos el selector "Guardar como" del sistema (SAF).
     var idPorExportar by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -119,8 +129,31 @@ fun LibraryScreen(
         if (uri != null && id != null) vm.exportar(id, uri.toString())
     }
 
+    val contexto = LocalContext.current
     LaunchedEffect(Unit) {
-        vm.mensajes.collect { snackbar.showSnackbar(it) }
+        vm.mensajes.collect { m ->
+            when (m) {
+                is MensajeBiblioteca.Borrada -> {
+                    var deshecho = false
+                    try {
+                        val r = snackbar.showSnackbar(
+                            message = contexto.getString(R.string.biblioteca_borrada, m.titulo),
+                            actionLabel = contexto.getString(R.string.accion_deshacer),
+                            duration = SnackbarDuration.Short,
+                        )
+                        deshecho = r == SnackbarResult.ActionPerformed
+                    } finally {
+                        // También si el aviso se corta (otro aviso, salir de la pantalla): sin
+                        // "Deshacer" explícito, el borrado se hace.
+                        if (deshecho) vm.deshacerBorrado(m.id) else vm.confirmarBorrado(m.id)
+                    }
+                }
+                is MensajeBiblioteca.ErrorBorrar -> snackbar.showSnackbar(contexto.getString(R.string.biblioteca_error_borrar, m.detalle.orEmpty()))
+                MensajeBiblioteca.Exportada -> snackbar.showSnackbar(contexto.getString(R.string.biblioteca_exportada))
+                is MensajeBiblioteca.ErrorExportar -> snackbar.showSnackbar(contexto.getString(R.string.biblioteca_error_exportar, m.detalle.orEmpty()))
+                is MensajeBiblioteca.Importacion -> snackbar.showSnackbar(textoImportacionMidi(contexto, m.resultado))
+            }
+        }
     }
 
     val scope = rememberCoroutineScope()
@@ -193,21 +226,55 @@ fun LibraryScreen(
                     FilterChip(
                         selected = ui.filtro == f,
                         onClick = { vm.cambiarFiltro(f) },
-                        label = { Text(stringResource(R.string.biblioteca_filtro, f.etiqueta, ui.conteo[f] ?: 0)) },
+                        label = { Text(stringResource(R.string.biblioteca_filtro, stringResource(etiquetaFiltro(f)), ui.conteo[f] ?: 0)) },
                         modifier = Modifier.pulsable(),
                     )
                 }
             }
 
+            if (ui.mostrarBusqueda) {
+                OutlinedTextField(
+                    value = ui.busqueda,
+                    onValueChange = vm::buscar,
+                    placeholder = { Text(stringResource(R.string.biblioteca_buscar)) },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    trailingIcon = {
+                        if (ui.busqueda.isNotEmpty()) {
+                            IconButton(onClick = { vm.buscar("") }) {
+                                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.biblioteca_buscar_limpiar))
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.large,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Espacio.l, vertical = Espacio.xs),
+                )
+            }
+
             if (!ui.cargando && ui.canciones.isEmpty()) {
-                EstadoVacio(ui.filtro, onNuevaCancion, onImportar)
+                if (ui.busqueda.isNotBlank() && ui.mostrarBusqueda) {
+                    Text(
+                        stringResource(R.string.biblioteca_sin_resultados, ui.busqueda),
+                        color = PianoColors.TextoSecundario,
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(Espacio.xxl),
+                    )
+                } else {
+                    EstadoVacio(ui.filtro, onNuevaCancion, onImportar)
+                }
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(start = Espacio.l, end = Espacio.l, top = Espacio.s, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(Espacio.m),
                 ) {
                     items(ui.canciones, key = { it.id }) { cancion ->
-                        FilaDeslizable(onPedirBorrar = { porBorrar = cancion }) {
+                        // animateItem: borrar, deshacer y filtrar desplazan las filas en vez de saltar.
+                        FilaDeslizable(onBorrar = { vm.borrar(cancion) }, modifier = Modifier.animateItem()) {
                             TarjetaCancion(
                                 cancion = cancion,
                                 onReproducir = { onAbrir(ModoPiano.REPRODUCIR, cancion.id) },
@@ -217,7 +284,7 @@ fun LibraryScreen(
                                     idPorExportar = cancion.id
                                     selectorArchivo.launch(nombreArchivo(cancion.titulo))
                                 },
-                                onBorrar = { porBorrar = cancion },
+                                onBorrar = { vm.borrar(cancion) },
                             )
                         }
                     }
@@ -226,41 +293,30 @@ fun LibraryScreen(
         }
     }
 
-    porBorrar?.let { cancion ->
-        AlertDialog(
-            onDismissRequest = { porBorrar = null },
-            title = { Text(stringResource(R.string.biblioteca_borrar_titulo)) },
-            text = { Text(stringResource(R.string.biblioteca_borrar_texto, cancion.titulo, textoNotas(cancion.numNotas))) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        vm.borrar(cancion)
-                        porBorrar = null
-                    },
-                    modifier = Modifier.pulsable(),
-                ) { Text(stringResource(R.string.accion_borrar), color = PianoColors.Error) }
-            },
-            dismissButton = { TextButton(onClick = { porBorrar = null }, modifier = Modifier.pulsable()) { Text(stringResource(R.string.accion_cancelar)) } },
-        )
-    }
+}
+
+private fun etiquetaFiltro(f: FiltroBiblioteca) = when (f) {
+    FiltroBiblioteca.TODAS -> R.string.biblioteca_filtro_todas
+    FiltroBiblioteca.CREADAS -> R.string.biblioteca_filtro_creadas
+    FiltroBiblioteca.EXPORTADAS -> R.string.biblioteca_filtro_exportadas
 }
 
 /**
- * Deslizar a la izquierda NO borra directamente: pide confirmación y la tarjeta
- * vuelve a su sitio (confirmValueChange devuelve false). Si el usuario cancela,
- * no queda nada a medio borrar.
+ * Deslizar a la izquierda borra, pero se puede deshacer desde el aviso: la canción solo
+ * se oculta y el borrado real llega cuando el aviso se cierra.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun FilaDeslizable(onPedirBorrar: () -> Unit, contenido: @Composable () -> Unit) {
+private fun FilaDeslizable(onBorrar: () -> Unit, modifier: Modifier = Modifier, contenido: @Composable () -> Unit) {
     val estado = rememberSwipeToDismissBoxState(
         confirmValueChange = { valor ->
-            if (valor == SwipeToDismissBoxValue.EndToStart) onPedirBorrar()
-            false
+            if (valor == SwipeToDismissBoxValue.EndToStart) onBorrar()
+            valor == SwipeToDismissBoxValue.EndToStart
         },
     )
     SwipeToDismissBox(
         state = estado,
+        modifier = modifier,
         enableDismissFromStartToEnd = false,
         backgroundContent = {
             Box(
@@ -359,7 +415,7 @@ private fun TarjetaCancion(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    FORMATO_FECHA.format(Instant.ofEpochMilli(cancion.fechaCreacion).atZone(ZoneId.systemDefault())),
+                    remember(cancion.fechaCreacion) { formatoFecha().format(Instant.ofEpochMilli(cancion.fechaCreacion).atZone(ZoneId.systemDefault())) },
                     color = PianoColors.TextoDeshabilitado,
                     style = MaterialTheme.typography.labelSmall,
                 )

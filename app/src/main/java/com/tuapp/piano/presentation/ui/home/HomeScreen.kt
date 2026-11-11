@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -74,6 +75,7 @@ import com.tuapp.piano.domain.model.ModoPiano
 import com.tuapp.piano.presentation.ui.common.ESCALA_ICONO
 import com.tuapp.piano.presentation.ui.common.pulsable
 import com.tuapp.piano.presentation.ui.common.rememberSelectorMidi
+import com.tuapp.piano.presentation.ui.common.textoImportacionMidi
 import com.tuapp.piano.presentation.ui.common.tocable
 import com.tuapp.piano.presentation.ui.theme.Espacio
 import com.tuapp.piano.presentation.ui.theme.Movimiento
@@ -114,7 +116,8 @@ fun HomeScreen(
     val ui by vm.ui.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) { vm.mensajes.collect { snackbar.showSnackbar(it) } }
+    val contexto = LocalContext.current
+    LaunchedEffect(Unit) { vm.mensajes.collect { snackbar.showSnackbar(textoImportacionMidi(contexto, it)) } }
     val errorLeer = stringResource(R.string.biblioteca_error_leer_midi)
     val abrirMidi = rememberSelectorMidi(
         onLeido = vm::importarMidi,

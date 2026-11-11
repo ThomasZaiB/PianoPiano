@@ -2,9 +2,16 @@ package com.tuapp.piano.presentation.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -57,6 +64,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -68,6 +78,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -84,7 +95,10 @@ import com.tuapp.piano.presentation.ui.common.ModoInstrumento
 import com.tuapp.piano.presentation.ui.common.pulsable
 import com.tuapp.piano.presentation.ui.common.ESCALA_ICONO
 import com.tuapp.piano.R
+import com.tuapp.piano.domain.model.Compas
+import com.tuapp.piano.domain.model.ErrorMotor
 import com.tuapp.piano.domain.model.EstadoMotor
+import com.tuapp.piano.domain.model.NombresNotas
 import com.tuapp.piano.domain.model.Mano
 import com.tuapp.piano.domain.model.ModoPiano
 import com.tuapp.piano.domain.practica.ManoPractica
@@ -103,8 +117,10 @@ import com.tuapp.piano.presentation.ui.theme.movimientoReducido
 import com.tuapp.piano.presentation.viewmodel.EstadoGrabacion
 import com.tuapp.piano.presentation.viewmodel.EstadoPractica
 import com.tuapp.piano.presentation.viewmodel.EventoPiano
+import com.tuapp.piano.presentation.viewmodel.MensajePiano
 import com.tuapp.piano.presentation.viewmodel.PianoUiState
 import com.tuapp.piano.presentation.viewmodel.PianoViewModel
+import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -144,10 +160,11 @@ fun PianoScreen(
         }
     }
 
+    val contexto = LocalContext.current
     LaunchedEffect(Unit) {
         vm.eventos.collect { evento ->
             when (evento) {
-                is EventoPiano.Mensaje -> snackbar.showSnackbar(evento.texto)
+                is EventoPiano.Mensaje -> snackbar.showSnackbar(textoMensaje(contexto, evento.mensaje))
                 is EventoPiano.Guardada ->
                     if (evento.volverABiblioteca) irABiblioteca() else snackbar.showSnackbar(textoGuardada)
             }
@@ -172,33 +189,51 @@ fun PianoScreen(
         Column(Modifier.fillMaxSize()) {
             BarraSuperior(ui, vm, onVolver = { volver() })
             if (ui.modo == ModoPiano.REPRODUCIR || ui.modo == ModoPiano.PRACTICA) BarraProgreso(ui, vm)
-            AndroidView(
-                modifier = Modifier
+            BoxWithConstraints(
+                Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                factory = { ctx ->
-                    PianoSurfaceView(ctx).apply {
-                        listener = object : PianoSurfaceView.Listener {
-                            override fun onNoteOn(nota: Int, velocidad: Int, mano: Mano) = vm.noteOn(nota, mano, velocidad)
-                            override fun onNoteOff(nota: Int, mano: Mano) = vm.noteOff(nota, mano)
-                            override fun onZoom(teclasVisibles: Int) = vm.fijarZoom(teclasVisibles)
-                        }
-                        fuenteReloj = vm::leerReloj
-                    }.also { teclado = it }
-                },
-                update = { vista ->
-                    vista.setCancion(ui.cancion)
-                    vista.latenciaAudioMs = ui.latenciaMs ?: 0.0
-                    vista.teclasVisibles = ui.teclasVisibles
-                    vista.notaDivision = ui.ajustes.notaDivision
-                    vista.dinamicaTactil = ui.ajustes.dinamicaTactil
-                    vista.sensibilidad = ui.ajustes.sensibilidad
-                    vista.vibrarAlTocar = ui.ajustes.vibrarAlTocar
-                    vista.movimientoReducido = reducido
-                    vista.compasesVisibles = ui.ajustes.velocidadCascada.compasesVisibles
-                    vista.etiquetas = TecladoGeometria.etiquetas(ui.ajustes.notacion, ui.ajustes.etiquetas)
-                },
-            )
+            ) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { ctx ->
+                        PianoSurfaceView(ctx).apply {
+                            listener = object : PianoSurfaceView.Listener {
+                                override fun onNoteOn(nota: Int, velocidad: Int, mano: Mano) = vm.noteOn(nota, mano, velocidad)
+                                override fun onNoteOff(nota: Int, mano: Mano) = vm.noteOff(nota, mano)
+                                override fun onZoom(teclasVisibles: Int) = vm.fijarZoom(teclasVisibles)
+                            }
+                            fuenteReloj = vm::leerReloj
+                        }.also { teclado = it }
+                    },
+                    update = { vista ->
+                        vista.setCancion(ui.cancion)
+                        vista.latenciaAudioMs = ui.latenciaMs ?: 0.0
+                        vista.teclasVisibles = ui.teclasVisibles
+                        vista.notaDivision = ui.ajustes.notaDivision
+                        vista.dinamicaTactil = ui.ajustes.dinamicaTactil
+                        vista.sensibilidad = ui.ajustes.sensibilidad
+                        vista.vibrarAlTocar = ui.ajustes.vibrarAlTocar
+                        vista.movimientoReducido = reducido
+                        vista.compasesVisibles = ui.ajustes.velocidadCascada.compasesVisibles
+                        vista.etiquetas = TecladoGeometria.etiquetas(ui.ajustes.notacion, ui.ajustes.etiquetas)
+                    },
+                )
+                // Rótulos sobre la cascada, justo encima de la línea de impacto: ahí mira quien toca.
+                val sobreLaLinea = TecladoGeometria.altoTecladoDp(maxHeight.value).dp + Espacio.l
+                if (ui.modo == ModoPiano.PRACTICA) {
+                    RotuloPractica(
+                        ui,
+                        reducido,
+                        Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = sobreLaLinea),
+                    )
+                }
+                if (ui.cuentaEntrada && ui.grabacion == EstadoGrabacion.GRABANDO) {
+                    CuentaEntrada(vm, ui.compas, reducido, Modifier.align(Alignment.Center).padding(bottom = sobreLaLinea / 2))
+                }
+            }
         }
 
         if (ui.cargandoCancion || ui.estadoMotor == EstadoMotor.CARGANDO) {
@@ -215,7 +250,7 @@ fun PianoScreen(
 
     if (ui.dialogoGuardar) {
         DialogoGuardar(
-            sugerido = ui.tituloSugerido,
+            sugerido = ui.tituloSugerido.ifEmpty { tituloPorDefecto() },
             esOverdub = ui.modo == ModoPiano.GRABAR && ui.cancion != null,
             numNotas = ui.notasGrabadas,
             guardando = ui.guardando,
@@ -309,7 +344,7 @@ private fun BarraSuperior(ui: PianoUiState, vm: PianoViewModel, onVolver: () -> 
 
         if (ui.estadoMotor == EstadoMotor.ERROR) {
             Text(
-                ui.error ?: stringResource(R.string.piano_error_audio),
+                textoErrorMotor(ui.error),
                 color = PianoColors.Error,
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 1,
@@ -397,49 +432,108 @@ private fun ControlesPractica(ui: PianoUiState, vm: PianoViewModel, listo: Boole
         BotonOpcionesPractica(ui, vm)
     }
 
-    // Destello rojo en cada error (idError cambia aunque el texto sea el mismo).
+    // En la barra solo el marcador; lo que hay que tocar va en el rótulo sobre la cascada.
+    Column(Modifier.widthIn(max = ANCHO_MAX_MARCADOR)) {
+        Text(
+            stringResource(R.string.piano_practica_marcador, p.aciertos, p.errores, p.precision),
+            color = PianoColors.TextoSecundario,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Espacio.s)) {
+            ResumenSeleccion(ui)
+            ContadorRacha(p.racha, movimientoReducido())
+        }
+    }
+    GrupoTempo(ui, vm, listo)
+}
+
+/**
+ * Lo que importa en práctica ("Toca Do4 · Mi4", el error), grande y centrado justo encima de
+ * la línea de impacto, donde el usuario ya está mirando. Destella en rojo con cada error.
+ */
+@Composable
+private fun RotuloPractica(ui: PianoUiState, reducido: Boolean, modifier: Modifier) {
+    val p = ui.practica
+    val notacion = ui.ajustes.notacion
     val destello = remember { Animatable(0f) }
     LaunchedEffect(p.idError) {
-        if (p.idError > 0) {
+        if (p.idError > 0 && !reducido) {
             destello.snapTo(1f)
             destello.animateTo(0f)
         }
     }
+    val error = p.ultimoError
     val (texto, color) = when {
-        p.ultimoError != null -> p.ultimoError to PianoColors.Error
+        error != null -> stringResource(
+            R.string.piano_practica_error,
+            NombresNotas.nombre(error.tocada, notacion),
+            NombresNotas.lista(error.esperadas, notacion),
+        ) to PianoColors.Error
         p.estado == EstadoPractica.ESPERANDO -> stringResource(R.string.piano_practica_toca, p.pendientes) to PianoColors.ManoDerecha
         p.estado == EstadoPractica.LISTA -> stringResource(R.string.piano_practica_lista) to PianoColors.TextoSecundario
         p.estado == EstadoPractica.PAUSADA -> stringResource(R.string.piano_practica_pausa) to PianoColors.TextoSecundario
+        p.estado == EstadoPractica.TERMINADA -> return
         else -> stringResource(R.string.piano_practica_siguiente, p.pendientes) to PianoColors.Texto
     }
-    Column(Modifier.widthIn(max = 240.dp)) {
-        Text(
-            texto,
-            color = color,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .clip(MaterialTheme.shapes.small)
-                .background(PianoColors.Error.copy(alpha = 0.35f * destello.value))
-                .padding(horizontal = Espacio.xs, vertical = Espacio.xxs),
-        )
-        Row(
-            Modifier.padding(horizontal = Espacio.xs),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Espacio.s),
-        ) {
-            Text(
-                stringResource(R.string.piano_practica_marcador, p.aciertos, p.errores, p.precision),
-                color = PianoColors.TextoSecundario,
-                style = MaterialTheme.typography.labelSmall,
-            )
-            ResumenSeleccion(ui)
-            ContadorRacha(p.racha)
+    // Con movimiento reducido el error se marca con un fondo fijo en vez de un destello.
+    val fondoError = if (reducido && error != null) 0.25f else 0.35f * destello.value
+    Text(
+        texto,
+        color = color,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier
+            .widthIn(max = 480.dp)
+            .clip(CircleShape)
+            .background(PianoColors.Superficie.copy(alpha = 0.88f))
+            .background(PianoColors.Error.copy(alpha = fondoError))
+            .padding(horizontal = Espacio.l, vertical = Espacio.s),
+    )
+}
+
+/**
+ * Cuenta de entrada al grabar una canción nueva: 4-3-2-1 durante el primer compás, al ritmo
+ * del reloj del motor (el mismo que dispara el metrónomo). Se lee por frame mientras dura.
+ */
+@Composable
+private fun CuentaEntrada(vm: PianoViewModel, compas: Compas, reducido: Boolean, modifier: Modifier) {
+    val reloj = remember { RelojSnapshot() }
+    var restante by remember { mutableIntStateOf(compas.numerador) }
+    var fase by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(compas) {
+        while (isActive) {
+            withFrameNanos { }
+            vm.leerReloj(reloj)
+            val tick = reloj.tickAt(System.nanoTime())
+            if (reloj.running && tick >= compas.ticksPorCompas) {
+                restante = 0
+                break
+            }
+            val tiempo = (tick / compas.ticksPorTiempo).toInt().coerceIn(0, compas.numerador - 1)
+            restante = compas.numerador - tiempo
+            fase = ((tick % compas.ticksPorTiempo) / compas.ticksPorTiempo).toFloat()
         }
     }
-    GrupoTempo(ui, vm, listo)
+    if (restante <= 0) return
+    val descripcion = stringResource(R.string.piano_cuenta_descripcion, restante)
+    Text(
+        restante.toString(),
+        color = PianoColors.Texto,
+        style = MaterialTheme.typography.displayLarge,
+        fontWeight = FontWeight.Bold,
+        modifier = modifier
+            .semantics { contentDescription = descripcion }
+            .graphicsLayer {
+                // Cada número entra grande y se asienta: se siente el pulso sin oírlo.
+                val s = if (reducido) 1f else 1.25f - 0.25f * min(1f, fase * 3f)
+                scaleX = s
+                scaleY = s
+                alpha = if (reducido) 1f else 1f - 0.5f * fase
+            },
+    )
 }
 
 /** Abre el diálogo de mano y tramo. Se resalta en cian si hay algo distinto de "toda la canción, ambas manos". */
@@ -491,10 +585,11 @@ private fun ResumenSeleccion(ui: PianoUiState) {
 
 /** Racha de aciertos seguidos: aparece desde 2 y da un pequeño salto con cada nota. */
 @Composable
-private fun ContadorRacha(racha: Int) {
+private fun ContadorRacha(racha: Int, reducido: Boolean) {
     if (racha < 2) return
     val salto = remember { Animatable(1f) }
     LaunchedEffect(racha) {
+        if (reducido) return@LaunchedEffect
         salto.snapTo(1.35f)
         salto.animateTo(1f)
     }
@@ -561,8 +656,9 @@ private fun MenuVista(ui: PianoUiState, vm: PianoViewModel) {
 // =====================================================================================
 
 /**
- * Posición en la canción. Lee el reloj del motor 10 veces por segundo (no por frame:
- * es una barra, no la cascada). En REPRODUCIR se puede arrastrar para saltar.
+ * Posición en la canción. Con el transporte en marcha se actualiza en cada frame (avanza
+ * fluida, sin saltos de 100 ms); parado no sondea: solo relee unos frames tras cada
+ * cambio (pausa, Seek) hasta que el motor lo aplica. En REPRODUCIR se puede arrastrar para saltar.
  */
 @Composable
 private fun BarraProgreso(ui: PianoUiState, vm: PianoViewModel) {
@@ -572,11 +668,14 @@ private fun BarraProgreso(ui: PianoUiState, vm: PianoViewModel) {
 
     val reloj = remember { RelojSnapshot() }
     var tick by remember { mutableDoubleStateOf(0.0) }
-    LaunchedEffect(cancion) {
-        while (isActive) {
+    val corriendo = ui.reproduciendo || ui.practica.estado == EstadoPractica.EN_CURSO
+    LaunchedEffect(cancion, corriendo, ui.saltos) {
+        var lecturas = 0
+        while (isActive && (corriendo || lecturas < LECTURAS_TRAS_PARAR)) {
+            withFrameNanos { }
             vm.leerReloj(reloj)
             tick = reloj.tickAt(System.nanoTime()).coerceIn(0.0, duracion)
-            delay(100)
+            lecturas++
         }
     }
     // Mientras se arrastra, la barra sigue al dedo y no al reloj.
@@ -679,7 +778,34 @@ private fun IndicadorGrabacion(estado: EstadoGrabacion, notas: Int) {
         EstadoGrabacion.PAUSADA -> stringResource(R.string.piano_rec_pausa, textoNotas(notas)) to PianoColors.TextoSecundario
         else -> stringResource(R.string.piano_rec_lista) to PianoColors.TextoSecundario
     }
-    Text(texto, color = color, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Espacio.xs)) {
+        if (estado == EstadoGrabacion.GRABANDO) PuntoRec(movimientoReducido())
+        Text(texto, color = color, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+    }
+}
+
+/** Punto rojo de grabación que late despacio (fijo con movimiento reducido). */
+@Composable
+private fun PuntoRec(reducido: Boolean) {
+    val alfa = if (reducido) {
+        1f
+    } else {
+        val latido = rememberInfiniteTransition(label = "rec")
+        val valor by latido.animateFloat(
+            initialValue = 1f,
+            targetValue = 0.3f,
+            animationSpec = infiniteRepeatable(tween(LATIDO_REC_MS, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "alfaRec",
+        )
+        valor
+    }
+    Box(
+        Modifier
+            .size(10.dp)
+            .graphicsLayer { alpha = alfa }
+            .clip(CircleShape)
+            .background(PianoColors.Grabar),
+    )
 }
 
 @Composable
@@ -772,3 +898,36 @@ private val HAPTICA_ERROR =
     } else {
         android.view.HapticFeedbackConstants.LONG_PRESS
     }
+
+/** Ancho máximo del marcador de práctica en la barra: deja sitio al tempo y al pedal en 640 dp. */
+private val ANCHO_MAX_MARCADOR = 168.dp
+
+/** Frames que la barra de progreso relee el reloj tras parar o saltar (~200 ms a 60 Hz). */
+private const val LECTURAS_TRAS_PARAR = 12
+
+private const val LATIDO_REC_MS = 700
+
+private fun textoMensaje(contexto: android.content.Context, m: MensajePiano): String = when (m) {
+    MensajePiano.CancionNoEncontrada -> contexto.getString(R.string.piano_msg_no_encontrada)
+    MensajePiano.TomaVacia -> contexto.getString(R.string.piano_msg_toma_vacia)
+    is MensajePiano.ErrorAlGuardar -> contexto.getString(R.string.piano_msg_error_guardar, m.detalle.orEmpty())
+}
+
+@Composable
+private fun textoErrorMotor(e: ErrorMotor?): String = stringResource(
+    when (e) {
+        ErrorMotor.SOUNDFONT -> R.string.piano_error_soundfont
+        ErrorMotor.STREAM -> R.string.piano_error_stream
+        ErrorMotor.SALIDA_PERDIDA -> R.string.piano_error_salida
+        null -> R.string.piano_error_audio
+    },
+)
+
+/** "Mi canción 11/11/26 18:30", con el formato de fecha del idioma del teléfono. */
+@Composable
+private fun tituloPorDefecto(): String {
+    val fecha = remember {
+        java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.SHORT))
+    }
+    return stringResource(R.string.piano_titulo_por_defecto, fecha)
+}
