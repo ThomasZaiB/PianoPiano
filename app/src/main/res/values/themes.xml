@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tema de la ventana: la UI es Compose, esto solo cubre el arranque y evita el destello
+         blanco antes del primer frame. En Android 12+ lo amplía values-v31 con el splash. -->
+    <style name="Theme.PianoPiano" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/fondo</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

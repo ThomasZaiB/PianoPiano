@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Textos de las pantallas. Los mensajes que generan los ViewModel y el dominio
+     (errores, nombres de notas, etiquetas de cuantización) todavía están en el código. -->
+<resources>
+    <string name="app_name">PianoPiano</string>
+
+    <!-- Comunes -->
+    <string name="accion_volver">Volver</string>
+    <string name="accion_cancelar">Cancelar</string>
+    <string name="accion_borrar">Borrar</string>
+    <string name="accion_guardar">Guardar</string>
+    <string name="accion_descartar">Descartar</string>
+    <string name="bpm_valor">%1$d BPM</string>
+    <string name="bpm_menos">Menos BPM</string>
+    <string name="bpm_mas">Más BPM</string>
+    <string name="rotulo_tempo">Tempo</string>
+    <string name="rotulo_compas">Compás</string>
+
+    <!-- Home -->
+    <string name="home_lema">Toca, graba y practica</string>
+    <string name="home_ajustes">Ajustes</string>
+    <string name="home_continuar">Continuar</string>
+    <string name="home_nueva">Nueva en tu biblioteca</string>
+    <string name="home_detalle">%1$d BPM · %2$s · %3$s</string>
+    <string name="home_mejor">Mejor: %1$d %%</string>
+    <string name="home_sin_practicar">Aún sin practicar</string>
+    <string name="home_reproducir">Reproducir</string>
+    <string name="home_seguir_practicando">Seguir practicando</string>
+    <string name="home_practicar">Practicar</string>
+    <string name="home_escuchar">Escuchar</string>
+    <string name="home_empezar_titulo">Empieza tu primera canción</string>
+    <string name="home_empezar_desc">Grábala tocando o importa una partitura o un archivo MIDI.</string>
+    <string name="home_acceso_crear">Crear canción</string>
+    <string name="home_acceso_biblioteca">Biblioteca</string>
+    <string name="home_acceso_libre">Tocar libre</string>
+    <string name="home_acceso_importar">Importar</string>
+    <string name="home_recientes">Recientes</string>
+    <string name="home_ver_todo">Ver todo</string>
+
+    <!-- Ajustes -->
+    <string name="ajustes_titulo">Ajustes</string>
+    <string name="ajustes_seccion_teclado">Teclado</string>
+    <string name="ajustes_seccion_cascada">Cascada</string>
+    <string name="ajustes_notacion">Nombres de las notas</string>
+    <string name="ajustes_notacion_latina">Do Re Mi</string>
+    <string name="ajustes_notacion_inglesa">C D E</string>
+    <string name="ajustes_etiquetas">Etiquetas en las teclas</string>
+    <string name="ajustes_etiquetas_ninguna">Ninguna</string>
+    <string name="ajustes_etiquetas_do">Solo Do</string>
+    <string name="ajustes_etiquetas_c">Solo C</string>
+    <string name="ajustes_etiquetas_blancas">Blancas</string>
+    <string name="ajustes_division">División de manos</string>
+    <string name="ajustes_division_desc">Desde %1$s hacia arriba toca la mano derecha (cian); por debajo, la izquierda (magenta).</string>
+    <string name="ajustes_division_bajar">Bajar la división</string>
+    <string name="ajustes_division_subir">Subir la división</string>
+    <string name="ajustes_dinamica">Dinámica al tocar</string>
+    <string name="ajustes_dinamica_si">Cuanto más abajo tocas la tecla, más fuerte suena.</string>
+    <string name="ajustes_dinamica_no">Todas las notas suenan con la misma fuerza.</string>
+    <string name="ajustes_velocidad">Velocidad de caída</string>
+    <string name="ajustes_velocidad_desc">Más lenta deja ver más compases por delante.</string>
+    <string name="ajustes_velocidad_lenta">Lenta</string>
+    <string name="ajustes_velocidad_normal">Normal</string>
+    <string name="ajustes_velocidad_rapida">Rápida</string>
+    <string name="ajustes_restablecer">Restablecer valores</string>
+    <string name="ajustes_restablecer_titulo">¿Restablecer los ajustes?</string>
+    <string name="ajustes_restablecer_texto">Todos los ajustes volverán a sus valores originales.</string>
+    <string name="ajustes_restablecer_confirmar">Restablecer</string>
+    <string name="ajustes_version">PianoPiano · versión %1$s</string>
+
+    <!-- Biblioteca -->
+    <string name="biblioteca_titulo">Biblioteca</string>
+    <string name="biblioteca_importar">Importar</string>
+    <string name="biblioteca_nueva">Nueva canción</string>
+    <string name="biblioteca_filtro">%1$s (%2$d)</string>
+    <string name="biblioteca_borrar_titulo">¿Borrar canción?</string>
+    <string name="biblioteca_borrar_texto">«%1$s» (%2$s) se borrará. No se puede deshacer.</string>
+    <string name="biblioteca_etiqueta_midi">MIDI</string>
+    <string name="biblioteca_detalle">%1$d BPM · %2$s · %3$s · %4$s</string>
+    <string name="biblioteca_practicar">Practicar</string>
+    <string name="biblioteca_editar">Editar (añadir notas)</string>
+    <string name="biblioteca_exportar">Exportar a MIDI</string>
+    <string name="biblioteca_reproducir">Reproducir</string>
+    <string name="biblioteca_vacia_exportadas">Aún no has exportado ninguna canción</string>
+    <string name="biblioteca_vacia">Tu biblioteca está vacía.\nGraba tu primera canción o importa una partitura.</string>
+    <string name="biblioteca_grabar_primera">Grabar mi primera canción</string>
+    <string name="biblioteca_importar_texto">Importar una partitura</string>
+    <string name="biblioteca_mas_acciones">Más acciones</string>
+    <string name="biblioteca_importar_midi">Archivo MIDI (.mid)</string>
+    <string name="biblioteca_importar_texto_menu">Partitura en texto</string>
+    <string name="biblioteca_error_leer_midi">No se pudo leer el archivo</string>
+
+    <!-- Configurar grabación -->
+    <string name="setup_titulo">Nueva canción</string>
+    <string name="setup_comenzar">Comenzar a grabar</string>
+    <string name="setup_cuantizacion">Cuantización</string>
+    <string name="setup_perfecta">Perfecta</string>
+    <string name="setup_humana">Humana</string>
+    <string name="setup_ayuda_ninguna">Las notas se guardan tal como las tocaste.</string>
+    <string name="setup_ayuda_humana">Acerca cada nota a la rejilla de %1$s pero conserva parte de tu variación natural.</string>
+    <string name="setup_ayuda_perfecta">Cada nota cae exactamente en la rejilla de %1$s.</string>
+    <string name="setup_metronomo">Metrónomo</string>
+    <string name="setup_metronomo_desc">Marca el pulso mientras grabas</string>
+
+    <!-- Importar -->
+    <string name="importar_titulo">Importar canción</string>
+    <string name="importar_abrir_txt">Abrir .txt</string>
+    <string name="importar_error_leer">No se pudo leer el archivo</string>
+    <string name="importar_guardar">Guardar en la biblioteca</string>
+    <string name="importar_campo_titulo">Título</string>
+    <string name="importar_notacion">Notación</string>
+    <string name="importar_placeholder" translatable="false">[C4E4G4] D4 E4 - F4 …</string>
+    <string name="importar_ayuda">Cada elemento es un paso. [ ] = notas a la vez · C4 = Do central · # = sostenido · - = silencio</string>
+    <string name="importar_resumen">✓ %1$s · %2$s · %3$s</string>
+    <string name="importar_vista_vacia">Pega la notación para ver la vista previa</string>
+    <string name="importar_duracion_paso">Duración de cada paso</string>
+
+    <!-- Piano -->
+    <string name="piano_grabar_rapido">Grabar rápido</string>
+    <string name="piano_guardada">Guardada en la biblioteca</string>
+    <string name="piano_salir_titulo">¿Salir sin guardar?</string>
+    <string name="piano_salir_texto">Perderás %1$s de esta toma.</string>
+    <string name="piano_salir">Salir</string>
+    <string name="piano_quedarme">Quedarme</string>
+    <string name="piano_repetir">Repetir</string>
+    <string name="piano_alejar">Alejar</string>
+    <string name="piano_acercar">Acercar</string>
+    <string name="piano_pedal">Pedal</string>
+    <string name="piano_error_audio">Error de audio</string>
+    <string name="piano_pausa">Pausa</string>
+    <string name="piano_reproducir">Reproducir</string>
+    <string name="piano_volver_inicio">Volver al inicio</string>
+    <string name="piano_grabar">Grabar</string>
+    <string name="piano_continuar_grabando">Continuar grabando</string>
+    <string name="piano_detener">Detener</string>
+    <string name="piano_metronomo">Metrónomo</string>
+    <string name="piano_practicar">Practicar</string>
+    <string name="piano_reiniciar">Reiniciar</string>
+    <string name="piano_practica_toca">Toca: %1$s</string>
+    <string name="piano_practica_lista">Pulsa ▶ y toca las notas al llegar a la línea</string>
+    <string name="piano_practica_pausa">En pausa</string>
+    <string name="piano_practica_siguiente">Siguiente: %1$s</string>
+    <string name="piano_practica_marcador">✓ %1$d   ✗ %2$d   %3$d %%</string>
+    <string name="piano_rec">● REC  %1$s</string>
+    <string name="piano_rec_pausa">En pausa  ·  %1$s</string>
+    <string name="piano_rec_lista">Listo para grabar</string>
+    <string name="piano_modo_libre">Tocar libremente</string>
+    <string name="piano_modo_grabar">Nueva grabación</string>
+    <string name="piano_modo_reproducir">Reproducir</string>
+    <string name="piano_modo_practica">Práctica</string>
+    <string name="piano_guardar_overdub_titulo">Añadir a la canción</string>
+    <string name="piano_guardar_titulo">Guardar canción</string>
+    <string name="piano_guardar_nombre">Nombre</string>
+    <string name="piano_seguir_grabando">Seguir grabando</string>
+    <string name="piano_mas_opciones">Más opciones</string>
+    <string name="piano_menu_latencia">Latencia: %1$d ms</string>
+    <string name="piano_menu_latencia_sin_dato">Latencia: —</string>
+    <string name="piano_menu_cortes">Cortes de audio: %1$d</string>
+    <string name="piano_posicion">Posición en la canción</string>
+    <string name="piano_racha">×%1$d</string>
+
+    <!-- Opciones de práctica -->
+    <string name="opciones_titulo">Qué practicar</string>
+    <string name="opciones_mano">Mano</string>
+    <string name="opciones_mano_ambas">Ambas</string>
+    <string name="opciones_mano_izquierda">Izquierda</string>
+    <string name="opciones_mano_derecha">Derecha</string>
+    <string name="opciones_mano_acompanamiento">La otra mano sonará sola como acompañamiento.</string>
+    <string name="opciones_tramo">Repetir un tramo</string>
+    <string name="opciones_tramo_desc">Practica unos compases en bucle, con un compás de preparación.</string>
+    <string name="opciones_desde">Desde el compás</string>
+    <string name="opciones_hasta">Hasta el compás</string>
+    <string name="opciones_compas_menos">%1$s: uno menos</string>
+    <string name="opciones_compas_mas">%1$s: uno más</string>
+    <string name="opciones_aplicar">Aplicar</string>
+    <string name="practica_mano_izq_corta">Mano izq.</string>
+    <string name="practica_mano_der_corta">Mano der.</string>
+    <string name="practica_tramo_corto">c. %1$d–%2$d</string>
+    <string name="practica_vuelta">vuelta %1$d</string>
+
+    <!-- Resultado de la práctica -->
+    <string name="resultado_mensaje_3">¡Perfecto! Dominas esta canción</string>
+    <string name="resultado_mensaje_2">¡Muy bien! Ya casi la tienes</string>
+    <string name="resultado_mensaje_1">¡Completada! Sigue practicando</string>
+    <string name="resultado_mensaje_0">Completada. Prueba a bajar el tempo</string>
+    <string name="resultado_estrellas_desc">%1$d de 3 estrellas</string>
+    <string name="resultado_valor_porcentaje">%1$d %%</string>
+    <string name="resultado_precision">Precisión</string>
+    <string name="resultado_aciertos">Aciertos</string>
+    <string name="resultado_errores">Errores</string>
+    <string name="resultado_mejor_racha">Mejor racha</string>
+    <string name="resultado_volver">Volver</string>
+
+    <!-- Cantidades (español: one = 1; many solo aplica a números muy grandes) -->
+    <plurals name="cantidad_notas">
+        <item quantity="one">%d nota</item>
+        <item quantity="many">%d notas</item>
+        <item quantity="other">%d notas</item>
+    </plurals>
+    <plurals name="cantidad_pasos">
+        <item quantity="one">%d paso</item>
+        <item quantity="many">%d pasos</item>
+        <item quantity="other">%d pasos</item>
+    </plurals>
+    <plurals name="piano_guardar_overdub_texto">
+        <item quantity="one">Se añadirá %d nota nueva a las existentes.</item>
+        <item quantity="many">Se añadirán %d notas nuevas a las existentes.</item>
+        <item quantity="other">Se añadirán %d notas nuevas a las existentes.</item>
+    </plurals>
+    <plurals name="piano_guardar_texto">
+        <item quantity="one">%d nota grabada.</item>
+        <item quantity="many">%d notas grabadas.</item>
+        <item quantity="other">%d notas grabadas.</item>
+    </plurals>
+</resources>

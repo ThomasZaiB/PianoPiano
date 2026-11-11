@@ -1,0 +1,19 @@
+# Gradle / Kotlin
+.gradle/
+.kotlin/
+build/
+app/build/
+# Android Studio
+.idea/
+*.iml
+local.properties
+captures/
+# NDK / CMake
+app/.cxx/
+.externalNativeBuild/
+# Binarios generados
+apk/
+*.apk
+*.aab
+# Salidas de compilación release
+app/release/

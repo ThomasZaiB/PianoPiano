@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Logo de la portada: el dibujo del ícono sin el margen de zona segura. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="60dp"
+    android:height="60dp"
+    android:viewportWidth="60"
+    android:viewportHeight="60">
+    <group android:translateX="-24" android:translateY="-24">
+    <!-- Notas cayendo (mano derecha cian, izquierda magenta) -->
+    <path android:fillColor="@color/cian" android:pathData="M44.5,30h6a1.5,1.5 0,0 1,1.5 1.5v21a1.5,1.5 0,0 1,-1.5 1.5h-6a1.5,1.5 0,0 1,-1.5 -1.5v-21a1.5,1.5 0,0 1,1.5 -1.5z" />
+    <path android:fillColor="@color/magenta" android:pathData="M69.5,40h6a1.5,1.5 0,0 1,1.5 1.5v11a1.5,1.5 0,0 1,-1.5 1.5h-6a1.5,1.5 0,0 1,-1.5 -1.5v-11a1.5,1.5 0,0 1,1.5 -1.5z" />
+    <!-- Línea de impacto -->
+    <path android:fillColor="@color/cian" android:pathData="M30,56h48v1.2h-48z" />
+    <!-- Teclas blancas -->
+    <path android:fillColor="@color/tecla_blanca" android:pathData="M30,58.5h11v19a2,2 0,0 1,-2 2h-7a2,2 0,0 1,-2 -2z" />
+    <path android:fillColor="@color/tecla_blanca" android:pathData="M42.3,58.5h11v19a2,2 0,0 1,-2 2h-7a2,2 0,0 1,-2 -2z" />
+    <path android:fillColor="@color/tecla_blanca" android:pathData="M54.7,58.5h11v19a2,2 0,0 1,-2 2h-7a2,2 0,0 1,-2 -2z" />
+    <path android:fillColor="@color/tecla_blanca" android:pathData="M67,58.5h11v19a2,2 0,0 1,-2 2h-7a2,2 0,0 1,-2 -2z" />
+    <!-- Teclas negras (Do#, Re#; entre Mi y Fa no hay) -->
+    <path android:fillColor="@color/fondo" android:pathData="M38.2,58.5h7v11a1.5,1.5 0,0 1,-1.5 1.5h-4a1.5,1.5 0,0 1,-1.5 -1.5z" />
+    <path android:fillColor="@color/fondo" android:pathData="M50.5,58.5h7v11a1.5,1.5 0,0 1,-1.5 1.5h-4a1.5,1.5 0,0 1,-1.5 -1.5z" />
+    </group>
+</vector>

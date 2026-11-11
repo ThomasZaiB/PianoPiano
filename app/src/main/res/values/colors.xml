@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copia para XML (ícono, splash) de los valores de ui/theme/Paleta.kt. Si cambias uno, cambia el otro. -->
+<resources>
+    <color name="fondo">#FF121212</color>
+    <color name="tecla_blanca">#FFFFFFFF</color>
+    <color name="cian">#FF00E5FF</color>
+    <color name="magenta">#FFFF4081</color>
+</resources>

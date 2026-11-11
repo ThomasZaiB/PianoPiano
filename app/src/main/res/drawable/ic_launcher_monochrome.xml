@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lienzo de 108dp; el sistema recorta todo lo que esté fuera del círculo central de 66dp. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Reducido al 88 % para que las esquinas de las teclas no se corten en máscaras circulares. -->
+    <group android:pivotX="54" android:pivotY="54" android:scaleX="0.88" android:scaleY="0.88">
+    <!-- Notas cayendo (mano derecha cian, izquierda magenta) -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M44.5,30h6a1.5,1.5 0,0 1,1.5 1.5v21a1.5,1.5 0,0 1,-1.5 1.5h-6a1.5,1.5 0,0 1,-1.5 -1.5v-21a1.5,1.5 0,0 1,1.5 -1.5z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M69.5,40h6a1.5,1.5 0,0 1,1.5 1.5v11a1.5,1.5 0,0 1,-1.5 1.5h-6a1.5,1.5 0,0 1,-1.5 -1.5v-11a1.5,1.5 0,0 1,1.5 -1.5z" />
+    <!-- Línea de impacto -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M30,56h48v1.2h-48z" />
+    <!-- Teclas blancas -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M30,58.5h11v19a2,2 0,0 1,-2 2h-7a2,2 0,0 1,-2 -2z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M42.3,58.5h11v19a2,2 0,0 1,-2 2h-7a2,2 0,0 1,-2 -2z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M54.7,58.5h11v19a2,2 0,0 1,-2 2h-7a2,2 0,0 1,-2 -2z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M67,58.5h11v19a2,2 0,0 1,-2 2h-7a2,2 0,0 1,-2 -2z" />
+    </group>
+</vector>
