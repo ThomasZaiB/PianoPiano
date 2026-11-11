@@ -177,6 +177,22 @@ class PianoSurfaceView @JvmOverloads constructor(
         altoMinimapa = 22f * densidad
         altoTeclado = (altoVista * PROPORCION_TECLADO).coerceIn(110f * densidad, 260f * densidad)
         topTeclado = altoVista - altoTeclado
+        excluirGestosDelSistema()
+    }
+
+    /**
+     * Un glissando que empieza en el borde izquierdo o derecho dispararía el gesto "atrás".
+     * Android solo respeta [MAX_EXCLUSION_DP] de alto por borde: se cubre la parte baja del
+     * teclado, que es la zona de las blancas y donde casi siempre empieza un glissando.
+     * Solo se llama al cambiar de tamaño, nunca por frame (crea objetos).
+     */
+    private fun excluirGestosDelSistema() {
+        val alto = min(altoTeclado, MAX_EXCLUSION_DP * densidad).toInt()
+        // ViewCompat: la API existe desde Android 10; en versiones anteriores no hay gesto de borde.
+        androidx.core.view.ViewCompat.setSystemGestureExclusionRects(
+            this,
+            listOf(android.graphics.Rect(0, altoVista - alto, anchoVista, altoVista)),
+        )
     }
 
     fun centrarEnNota(nota: Int) {
@@ -601,6 +617,8 @@ class PianoSurfaceView @JvmOverloads constructor(
         const val VELOCIDAD_MIN = 45
         const val PROPORCION_TECLADO = 0.34f
         const val VELOCIDAD_FIJA = 100
+        /** Límite de Android para la exclusión de gestos por borde (View.setSystemGestureExclusionRects). */
+        const val MAX_EXCLUSION_DP = 200f
         const val ADELANTO_DISPLAY_NS = 16_666_667L
 
         // Colores: salen de la misma Paleta que usa el tema de Compose.

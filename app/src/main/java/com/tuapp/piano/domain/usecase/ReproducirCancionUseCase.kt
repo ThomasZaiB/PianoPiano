@@ -5,8 +5,10 @@ import com.tuapp.piano.domain.model.Mano
 import com.tuapp.piano.domain.model.PPQ
 import com.tuapp.piano.domain.model.RelojSnapshot
 import com.tuapp.piano.domain.repository.AudioEngineRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 import kotlin.math.max
 import javax.inject.Inject
@@ -23,18 +25,27 @@ import javax.inject.Inject
 class ReproducirCancionUseCase @Inject constructor(
     private val motor: AudioEngineRepository,
 ) {
-    private class Evento(val tick: Long, val encender: Boolean, val nota: Int, val mano: Mano, val velocidad: Int)
+    class Evento(val tick: Long, val encender: Boolean, val nota: Int, val mano: Mano, val velocidad: Int)
+
+    /**
+     * Últimas canciones preparadas, por identidad. Práctica reanuda tras cada espera y
+     * reordenar miles de eventos en cada reanudación costaba un frame en el hilo principal.
+     * Solo se toca desde el hilo de quien invoca (el principal en la app).
+     */
+    private val preparadas = ArrayDeque<Pair<Cancion, List<Evento>>>(MAX_PREPARADAS)
+
+    /** Calcula (fuera del hilo principal) y guarda los eventos de [cancion]. Se puede llamar antes de reproducir. */
+    suspend fun preparar(cancion: Cancion): List<Evento> {
+        preparadas.firstOrNull { it.first === cancion }?.let { return it.second }
+        val eventos = withContext(Dispatchers.Default) { eventosOrdenados(cancion) }
+        if (preparadas.size >= MAX_PREPARADAS) preparadas.removeFirst()
+        preparadas.addLast(cancion to eventos)
+        return eventos
+    }
 
     /** Termina cuando todos los eventos se han enviado (no cuando terminan de sonar). */
     suspend operator fun invoke(cancion: Cancion, desdeTick: Double) {
-        val eventos = cancion.notas
-            .flatMap {
-                listOf(
-                    Evento(it.tickInicio, true, it.nota, it.mano, it.velocidad),
-                    Evento(it.tickFin, false, it.nota, it.mano, 0),
-                )
-            }
-            .sortedWith(compareBy<Evento> { it.tick }.thenBy { it.encender }) // Off antes que On
+        val eventos = preparar(cancion)
 
         // Las notas que empezaron antes del punto de partida no se re-atacan.
         var i = eventos.indexOfFirst { it.tick >= desdeTick && (it.encender || it.tick > desdeTick) }
@@ -64,9 +75,22 @@ class ReproducirCancionUseCase @Inject constructor(
         }
     }
 
-    private companion object {
+    companion object {
         /** Margen de envío: cubre de sobra el jitter del planificador de Kotlin. */
-        const val ANTELACION_S = 0.25
-        const val PERIODO_MS = 25L
+        private const val ANTELACION_S = 0.25
+        private const val PERIODO_MS = 25L
+        /** La canción y, en práctica de una mano, su acompañamiento. */
+        private const val MAX_PREPARADAS = 2
+
+        /** On y Off de cada nota, por tick; en el mismo tick el Off va antes (Do-Do se re-ataca). */
+        fun eventosOrdenados(cancion: Cancion): List<Evento> =
+            cancion.notas
+                .flatMap {
+                    listOf(
+                        Evento(it.tickInicio, true, it.nota, it.mano, it.velocidad),
+                        Evento(it.tickFin, false, it.nota, it.mano, 0),
+                    )
+                }
+                .sortedWith(compareBy<Evento> { it.tick }.thenBy { it.encender })
     }
 }

@@ -3,6 +3,8 @@ package com.tuapp.piano.domain.usecase
 import com.tuapp.piano.domain.model.Cancion
 import com.tuapp.piano.domain.musica.LectorMidi
 import com.tuapp.piano.domain.repository.CancionRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /** Crea una canción a partir de un archivo .mid y la guarda en la biblioteca. */
@@ -17,7 +19,8 @@ class ImportarMidiUseCase @Inject constructor(
         nombreArchivo: String?,
         ahoraMillis: Long = System.currentTimeMillis(),
     ): Resultado {
-        val leido = LectorMidi.leer(bytes)
+        // Un .mid puede pesar varios MB: analizarlo en el hilo principal congelaría la UI.
+        val leido = withContext(Dispatchers.Default) { LectorMidi.leer(bytes) }
         val cancion = Cancion(
             titulo = (leido.titulo ?: nombreArchivo?.substringBeforeLast('.'))
                 ?.trim()?.take(60)?.ifEmpty { null } ?: "Canción importada",

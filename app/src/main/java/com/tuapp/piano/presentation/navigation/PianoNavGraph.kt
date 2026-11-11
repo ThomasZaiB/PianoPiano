@@ -6,7 +6,14 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.displayCutoutPadding
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.navigation.NavOptionsBuilder
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -50,45 +57,53 @@ fun PianoNavGraph(navController: NavHostController = rememberNavController()) {
         composable(Rutas.HOME) {
             // El inicio gira con el celular (tiene diseño vertical y acostado).
             FijarOrientacion(Orientacion.LIBRE)
-            HomeScreen(
-                onCrearCancion = { navController.navigate(Rutas.SONG_SETUP) },
-                onBiblioteca = { navController.navigate(Rutas.LIBRARY) },
-                onTocarLibre = { navController.navigate(Rutas.piano(ModoPiano.LIBRE)) },
-                onAjustes = { navController.navigate(Rutas.AJUSTES) },
-                onImportarTexto = { navController.navigate(Rutas.IMPORTAR) },
-                onAbrir = { modo, id -> navController.navigate(Rutas.piano(modo, id)) },
-            )
+            ConMargenesDelSistema {
+                HomeScreen(
+                    onCrearCancion = { navController.navegar(Rutas.SONG_SETUP) },
+                    onBiblioteca = { navController.navegar(Rutas.LIBRARY) },
+                    onTocarLibre = { navController.navegar(Rutas.piano(ModoPiano.LIBRE)) },
+                    onAjustes = { navController.navegar(Rutas.AJUSTES) },
+                    onImportarTexto = { navController.navegar(Rutas.IMPORTAR) },
+                    onAbrir = { modo, id -> navController.navegar(Rutas.piano(modo, id)) },
+                )
+            }
         }
 
         composable(Rutas.AJUSTES) {
             FijarOrientacion(Orientacion.VERTICAL)
-            AjustesScreen(onVolver = { navController.popBackStack() })
+            ConMargenesDelSistema { AjustesScreen(onVolver = { navController.volver() }) }
         }
 
         composable(Rutas.LIBRARY) {
             FijarOrientacion(Orientacion.VERTICAL)
-            LibraryScreen(
-                onVolver = { navController.popBackStack() },
-                onNuevaCancion = { navController.navigate(Rutas.SONG_SETUP) },
-                onImportar = { navController.navigate(Rutas.IMPORTAR) },
-                onAbrir = { modo, id -> navController.navigate(Rutas.piano(modo, id)) },
-            )
+            ConMargenesDelSistema {
+                LibraryScreen(
+                    onVolver = { navController.volver() },
+                    onNuevaCancion = { navController.navegar(Rutas.SONG_SETUP) },
+                    onImportar = { navController.navegar(Rutas.IMPORTAR) },
+                    onAbrir = { modo, id -> navController.navegar(Rutas.piano(modo, id)) },
+                )
+            }
         }
 
         composable(Rutas.IMPORTAR) {
             FijarOrientacion(Orientacion.VERTICAL)
-            ImportarCancionScreen(
-                onVolver = { navController.popBackStack() },
-                onGuardada = { navController.popBackStack() }, // vuelve a la biblioteca, que ya la muestra
-            )
+            ConMargenesDelSistema {
+                ImportarCancionScreen(
+                    onVolver = { navController.volver() },
+                    onGuardada = { navController.volver() }, // vuelve a la biblioteca, que ya la muestra
+                )
+            }
         }
 
         composable(Rutas.SONG_SETUP) {
             FijarOrientacion(Orientacion.VERTICAL)
-            SongSetupScreen(
-                onVolver = { navController.popBackStack() },
-                onComenzar = { config -> navController.navigate(Rutas.piano(ModoPiano.GRABAR, 0L, config)) },
-            )
+            ConMargenesDelSistema {
+                SongSetupScreen(
+                    onVolver = { navController.volver() },
+                    onComenzar = { config -> navController.navegar(Rutas.piano(ModoPiano.GRABAR, 0L, config)) },
+                )
+            }
         }
 
         composable(
@@ -105,17 +120,42 @@ fun PianoNavGraph(navController: NavHostController = rememberNavController()) {
             ),
         ) {
             FijarOrientacion(Orientacion.HORIZONTAL)
-            // PianoViewModel (hiltViewModel dentro de PianoScreen) recibe estos argumentos
-            // automáticamente en su SavedStateHandle.
-            PianoScreen(
-                onVolver = { navController.popBackStack() },
-                onIrABiblioteca = {
-                    navController.navigate(Rutas.LIBRARY) {
-                        popUpTo(Rutas.HOME) // quita la configuración y el piano de la pila
-                        launchSingleTop = true
-                    }
-                },
-            )
+            // Inmersivo: sin barras, pero ninguna tecla ni botón debajo del notch.
+            Box(Modifier.fillMaxSize().displayCutoutPadding()) {
+                // PianoViewModel (hiltViewModel dentro de PianoScreen) recibe estos argumentos
+                // automáticamente en su SavedStateHandle.
+                PianoScreen(
+                    onVolver = { navController.volver() },
+                    onIrABiblioteca = {
+                        navController.navegar(Rutas.LIBRARY) {
+                            popUpTo(Rutas.HOME) // quita la configuración y el piano de la pila
+                            launchSingleTop = true
+                        }
+                    },
+                )
+            }
         }
     }
 }
+
+@Composable
+private fun ConMargenesDelSistema(contenido: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().safeDrawingPadding()) { contenido() }
+}
+
+/**
+ * Única puerta de la navegación. Solo navega si la pantalla actual está RESUMED: un doble
+ * toque (o un toque durante la animación de entrada) no apila dos destinos ni saca dos de la pila.
+ */
+private fun NavHostController.navegar(ruta: String, opciones: NavOptionsBuilder.() -> Unit = {}) {
+    if (!actualActiva()) return
+    navigate(ruta, opciones)
+}
+
+private fun NavHostController.volver() {
+    if (!actualActiva()) return
+    popBackStack()
+}
+
+private fun NavHostController.actualActiva() =
+    currentBackStackEntry?.lifecycle?.currentState == Lifecycle.State.RESUMED

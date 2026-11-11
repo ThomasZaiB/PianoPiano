@@ -27,8 +27,10 @@ import com.tuapp.piano.domain.usecase.MetronomoUseCase
 import com.tuapp.piano.domain.usecase.ReproducirCancionUseCase
 import com.tuapp.piano.presentation.navigation.Rutas
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
@@ -205,11 +207,27 @@ class PianoViewModel @Inject constructor(
     /** Notas de la mano que no se practica; null si se practican las dos. */
     private var cancionAcompanamiento: Cancion? = null
 
-    private var trabajoReproduccion: Job? = null
     private var trabajoMetronomo: Job? = null
     private var trabajoMonitorPractica: Job? = null
-    private var trabajoAcompanamiento: Job? = null
     private var trabajoDiagnostico: Job? = null
+
+    // ---- Transporte: un único dueño de "la operación en curso" ----
+    /**
+     * Ámbito de la operación de transporte en curso: su arranque (que espera a que el motor
+     * aplique un Seek) y todo lo que lanza (reproducción, metrónomo, acompañamiento, espera
+     * al final). Cada comando nuevo la cancela ENTERA antes de empezar la suya, así que una
+     * corrutina atrasada nunca arranca nada para un estado que ya cambió.
+     */
+    private var operacion: CoroutineScope? = null
+
+    /** true desde que este ViewModel arranca el reloj del motor hasta que lo para. */
+    private var transporteCorriendo = false
+
+    /**
+     * Seek pedido al motor y aún no confirmado por su reloj. Mientras exista es la posición
+     * real: el reloj puede seguir mostrando la vieja durante un callback de audio.
+     */
+    private var destinoSalto: Double? = null
 
     init {
         viewModelScope.launch {
@@ -270,8 +288,9 @@ class PianoViewModel @Inject constructor(
         if (primeraPreparacion) {
             // El motor es compartido: otra pantalla pudo dejarlo en cualquier posición.
             primeraPreparacion = false
-            motor.transporteDetener()
-            saltarA(0.0)
+            pararMotorTransporte()
+            pedirSalto(0.0)
+            esperarSalto(0.0)
         }
         _ui.update { it.copy(motorListo = true) }
         if (trabajoDiagnostico?.isActive != true) {
@@ -289,15 +308,17 @@ class PianoViewModel @Inject constructor(
 
     /** Pausa todo lo que esté corriendo (al salir de la pantalla o ir a segundo plano). */
     private fun detenerTodo() {
-        trabajoReproduccion?.cancel()
-        trabajoMetronomo?.cancel()
+        cancelarOperacion()
         trabajoMonitorPractica?.cancel()
-        trabajoAcompanamiento?.cancel()
-        motor.transporteDetener()
-        motor.todasLasNotasOff()
+        // Antes de parar: el reloj aún da la posición en la que el usuario soltó.
         if (_ui.value.grabacion == EstadoGrabacion.GRABANDO) {
             grabador.cerrarTodas(tickActual().toLong())
         }
+        pararMotorTransporte()
+        motor.todasLasNotasOff()
+        // El motor es compartido y conserva el sustain por canal: si no se suelta aquí, la
+        // próxima pantalla sonaría sostenida con el chip "Pedal" apagado.
+        motor.pedal(false)
         _ui.update { s ->
             s.copy(
                 reproduciendo = false,
@@ -345,6 +366,8 @@ class PianoViewModel @Inject constructor(
             if (modo == ModoPiano.REPRODUCIR || modo == ModoPiano.PRACTICA) actividad.registrarApertura(cancion.id, modo)
             actualizarPracticaUi()
             if (adquirido) motor.setTempo(cancion.bpm)
+            // Eventos ordenados listos antes del primer Play (en práctica se prepara el acompañamiento).
+            if (modo != ModoPiano.PRACTICA) reproducirCancion.preparar(cancion)
         }
     }
 
@@ -354,8 +377,8 @@ class PianoViewModel @Inject constructor(
 
     fun noteOn(nota: Int, mano: Mano, velocidad: Int) {
         motor.noteOn(nota, velocidad, mano) // primero el sonido: es lo más urgente
-        val s = _ui.value
-        if (s.grabacion == EstadoGrabacion.GRABANDO) {
+        // Solo con el reloj ya en marcha: en los ms de arranque su tick aún sería el viejo.
+        if (grabandoDeVerdad()) {
             grabador.notaOn(nota, velocidad, mano, tickPulsacion().toLong())
             _ui.update { it.copy(notasGrabadas = grabador.cantidad) }
         }
@@ -364,7 +387,7 @@ class PianoViewModel @Inject constructor(
 
     fun noteOff(nota: Int, mano: Mano) {
         motor.noteOff(nota, mano)
-        if (_ui.value.grabacion == EstadoGrabacion.GRABANDO) {
+        if (grabandoDeVerdad()) {
             grabador.notaOff(nota, tickPulsacion().toLong())
         }
     }
@@ -399,25 +422,25 @@ class PianoViewModel @Inject constructor(
     private fun iniciarReproduccion() {
         val cancion = _ui.value.cancion ?: return
         if (!_ui.value.motorListo) return
-        viewModelScope.launch {
+        // La UI refleja la intención al instante: un segundo toque ya es "Pausa".
+        _ui.update { it.copy(reproduciendo = true) }
+        val op = nuevaOperacion()
+        op.launch {
+            // Un salto aún sin confirmar (barra de progreso) manda sobre el reloj.
+            destinoSalto?.let { esperarSalto(it) }
             var desde = tickActual()
             if (desde >= cancion.duracionTicks) {
-                saltarA(0.0)
+                pedirSalto(0.0)
+                esperarSalto(0.0)
                 desde = 0.0
             }
-            lanzarReproduccion(cancion, desde, alTerminar = {
-                motor.transporteDetener()
-                saltarA(0.0)
-                _ui.update { it.copy(reproduciendo = false) }
-            })
-            motor.transporteIniciar()
-            _ui.update { it.copy(reproduciendo = true) }
+            reproducirDesde(cancion, desde)
         }
     }
 
     private fun pausarReproduccion() {
-        trabajoReproduccion?.cancel()
-        motor.transporteDetener() // el motor vacía su cola y apaga las notas de la canción
+        cancelarOperacion()
+        pararMotorTransporte() // el motor vacía su cola y apaga las notas de la canción
         _ui.update { it.copy(reproduciendo = false) }
     }
 
@@ -425,33 +448,31 @@ class PianoViewModel @Inject constructor(
 
     /** Salta a [tick] (barra de progreso). Si estaba sonando, sigue sonando desde ahí. */
     fun irATick(tick: Double) {
+        val cancion = _ui.value.cancion
+        val destino = tick.coerceIn(0.0, (cancion?.duracionTicks ?: 0L).toDouble())
+        // Intención en este instante; si después se pausa, la pausa cancela esta operación.
         val sonando = _ui.value.reproduciendo
-        val destino = tick.coerceIn(0.0, (_ui.value.cancion?.duracionTicks ?: 0L).toDouble())
-        trabajoReproduccion?.cancel()
-        motor.transporteDetener()
-        viewModelScope.launch {
-            saltarA(destino)
-            val cancion = _ui.value.cancion
-            if (sonando && cancion != null) {
-                lanzarReproduccion(cancion, destino, alTerminar = {
-                    motor.transporteDetener()
-                    saltarA(0.0)
-                    _ui.update { it.copy(reproduciendo = false) }
-                })
-                motor.transporteIniciar()
-            }
+        val op = nuevaOperacion()
+        pararMotorTransporte()
+        pedirSalto(destino)
+        op.launch {
+            esperarSalto(destino)
+            if (sonando && cancion != null) reproducirDesde(cancion, destino)
         }
     }
 
-    /** Programa las notas de [cancion] en el motor y, al terminar de sonar, ejecuta [alTerminar]. */
-    private fun lanzarReproduccion(cancion: Cancion, desde: Double, alTerminar: (suspend () -> Unit)? = null) {
-        trabajoReproduccion?.cancel()
-        trabajoReproduccion = viewModelScope.launch {
-            reproducirCancion(cancion, desde)
-            if (alTerminar != null) {
-                while (tickActual() < cancion.duracionTicks + cancion.compas.ticksPorTiempo) delay(50)
-                alTerminar()
-            }
+    /**
+     * Dentro de la operación actual: programa [cancion] desde [desde], arranca el reloj y,
+     * cuando termina de sonar, vuelve al principio.
+     */
+    private fun CoroutineScope.reproducirDesde(cancion: Cancion, desde: Double) {
+        launch { reproducirCancion(cancion, desde) }
+        arrancarMotorTransporte()
+        launch {
+            while (tickActual() < cancion.duracionTicks + cancion.compas.ticksPorTiempo) delay(50)
+            pararMotorTransporte()
+            _ui.update { it.copy(reproduciendo = false) }
+            pedirSalto(0.0)
         }
     }
 
@@ -473,44 +494,46 @@ class PianoViewModel @Inject constructor(
         when (s.grabacion) {
             EstadoGrabacion.LISTA -> {
                 grabador.limpiar()
-                viewModelScope.launch {
-                    motor.transporteDetener()
-                    saltarA(0.0)
+                val op = nuevaOperacion()
+                pararMotorTransporte()
+                pedirSalto(0.0)
+                op.launch {
+                    esperarSalto(0.0)
                     arrancarToma(0.0)
                 }
             }
-            EstadoGrabacion.PAUSADA -> arrancarToma(tickActual())
+            EstadoGrabacion.PAUSADA -> nuevaOperacion().arrancarToma(posicionActual())
             else -> return
         }
+        // GRABANDO desde ya: Pausa y Detener funcionan también durante el arranque.
         _ui.update { it.copy(grabacion = EstadoGrabacion.GRABANDO, notasGrabadas = grabador.cantidad) }
     }
 
     /** Acompañamiento (canción existente en overdub + metrónomo) y arranque del reloj. */
-    private fun arrancarToma(desde: Double) {
-        _ui.value.cancion?.let { lanzarReproduccion(it, desde) }
+    private fun CoroutineScope.arrancarToma(desde: Double) {
+        _ui.value.cancion?.let { c -> launch { reproducirCancion(c, desde) } }
         if (_ui.value.metronomo) lanzarMetronomo(desde)
-        motor.transporteIniciar()
+        arrancarMotorTransporte()
     }
 
-    private fun lanzarMetronomo(desde: Double) {
+    private fun CoroutineScope.lanzarMetronomo(desde: Double) {
         trabajoMetronomo?.cancel()
-        trabajoMetronomo = viewModelScope.launch { metronomoUseCase(_ui.value.compas, desde) }
+        trabajoMetronomo = launch { metronomoUseCase(_ui.value.compas, desde) }
     }
 
     fun alternarMetronomo() {
         val activo = !_ui.value.metronomo
         _ui.update { it.copy(metronomo = activo) }
-        if (_ui.value.grabacion == EstadoGrabacion.GRABANDO) {
-            if (activo) lanzarMetronomo(tickActual()) else trabajoMetronomo?.cancel()
-        }
+        // Si la toma aún está arrancando, arrancarToma leerá el valor nuevo.
+        if (!grabandoDeVerdad()) return
+        if (activo) operacion?.lanzarMetronomo(tickActual()) else trabajoMetronomo?.cancel()
     }
 
     fun pausarGrabacion() {
         if (_ui.value.grabacion != EstadoGrabacion.GRABANDO) return
-        trabajoReproduccion?.cancel()
-        trabajoMetronomo?.cancel()
+        cancelarOperacion()
         grabador.cerrarTodas(tickActual().toLong())
-        motor.transporteDetener()
+        pararMotorTransporte()
         _ui.update { it.copy(grabacion = EstadoGrabacion.PAUSADA, notasGrabadas = grabador.cantidad) }
     }
 
@@ -563,10 +586,9 @@ class PianoViewModel @Inject constructor(
     }
 
     private fun terminarToma() {
-        trabajoReproduccion?.cancel()
-        trabajoMetronomo?.cancel()
-        motor.transporteDetener()
-        viewModelScope.launch { saltarA(0.0) }
+        cancelarOperacion()
+        pararMotorTransporte()
+        pedirSalto(0.0)
         _ui.update {
             it.copy(
                 dialogoGuardar = false,
@@ -589,18 +611,7 @@ class PianoViewModel @Inject constructor(
         val ev = evaluador ?: return
         if (!_ui.value.motorListo) return
         when (_ui.value.practica.estado) {
-            EstadoPractica.LISTA, EstadoPractica.TERMINADA -> {
-                ev.reiniciar()
-                _ui.update { it.copy(practica = it.practica.copy(vuelta = 1)) }
-                viewModelScope.launch {
-                    pararTransporte()
-                    val desde = tickInicioPractica()
-                    saltarA(desde)
-                    reanudarTransporte(desde)
-                    lanzarMonitorPractica()
-                    actualizarPracticaUi(EstadoPractica.EN_CURSO, limpiarError = true)
-                }
-            }
+            EstadoPractica.LISTA, EstadoPractica.TERMINADA -> arrancarPractica(ev)
             EstadoPractica.EN_CURSO, EstadoPractica.ESPERANDO -> {
                 pararTransporte()
                 actualizarPracticaUi(EstadoPractica.PAUSADA)
@@ -609,7 +620,8 @@ class PianoViewModel @Inject constructor(
                 if (ev.esperando) {
                     actualizarPracticaUi(EstadoPractica.ESPERANDO)
                 } else {
-                    reanudarTransporte(tickActual())
+                    // posicionActual: si se pausó durante el arranque, el Seek inicial manda.
+                    reanudarTransporte(posicionActual())
                     actualizarPracticaUi(EstadoPractica.EN_CURSO)
                 }
                 if (trabajoMonitorPractica?.isActive != true) lanzarMonitorPractica()
@@ -617,12 +629,31 @@ class PianoViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Empieza desde el principio del tramo. El estado pasa a EN_CURSO en el acto (un doble
+     * toque ya es "Pausa" y cancela esta operación); el reloj arranca cuando el Seek se aplica.
+     */
+    private fun arrancarPractica(ev: EvaluadorPractica) {
+        trabajoMonitorPractica?.cancel()
+        ev.reiniciar()
+        _ui.update { it.copy(practica = it.practica.copy(vuelta = 1)) }
+        val desde = tickInicioPractica()
+        val op = nuevaOperacion()
+        pararMotorTransporte()
+        pedirSalto(desde)
+        actualizarPracticaUi(EstadoPractica.EN_CURSO, limpiarError = true)
+        op.launch {
+            esperarSalto(desde)
+            reanudarTransporte(desde, op)
+            lanzarMonitorPractica()
+        }
+    }
+
     fun reiniciarPractica() {
         trabajoMonitorPractica?.cancel()
         evaluador?.reiniciar()
         pararTransporte()
-        val desde = tickInicioPractica()
-        viewModelScope.launch { saltarA(desde) }
+        pedirSalto(tickInicioPractica())
         _ui.update { it.copy(practica = it.practica.copy(vuelta = 1)) }
         actualizarPracticaUi(EstadoPractica.LISTA, limpiarError = true)
     }
@@ -645,32 +676,38 @@ class PianoViewModel @Inject constructor(
         cancionAcompanamiento = seleccion.notasDeAcompanamiento(cancion)
             .takeIf { it.isNotEmpty() }
             ?.let { cancion.copy(notas = it) }
+        cancionAcompanamiento?.let { c -> viewModelScope.launch { reproducirCancion.preparar(c) } }
         _ui.update { it.copy(seleccionPractica = seleccion) }
     }
 
     private fun tickInicioPractica(): Double = _ui.value.cancion?.let { seleccion.tickInicio(it).toDouble() } ?: 0.0
 
-    /** Arranca el transporte y, si se practica una sola mano, el acompañamiento desde [desde]. */
-    private fun reanudarTransporte(desde: Double) {
-        trabajoAcompanamiento?.cancel()
-        cancionAcompanamiento?.let { c -> trabajoAcompanamiento = viewModelScope.launch { reproducirCancion(c, desde) } }
-        motor.transporteIniciar()
+    /**
+     * Arranca el reloj y, si se practica una sola mano, el acompañamiento desde [desde].
+     * Sin [op] abre una operación nueva (reanudar tras una espera o una pausa).
+     */
+    private fun reanudarTransporte(desde: Double, op: CoroutineScope = nuevaOperacion()) {
+        cancionAcompanamiento?.let { c -> op.launch { reproducirCancion(c, desde) } }
+        arrancarMotorTransporte()
     }
 
-    /** Para transporte y acompañamiento (el motor apaga las notas programadas). */
+    /** Cancela la operación en curso (acompañamiento incluido) y para el reloj. */
     private fun pararTransporte() {
-        trabajoAcompanamiento?.cancel()
-        motor.transporteDetener()
+        cancelarOperacion()
+        pararMotorTransporte()
     }
 
     /** Fin del tramo en bucle: vuelve al principio (con su compás de preparación) sin borrar el marcador. */
     private suspend fun nuevaVuelta() {
         evaluador?.reiniciarVuelta()
-        pararTransporte()
+        val op = nuevaOperacion()
+        pararMotorTransporte()
         _ui.update { it.copy(practica = it.practica.copy(vuelta = it.practica.vuelta + 1)) }
         val desde = tickInicioPractica()
-        saltarA(desde)
-        if (_ui.value.practica.estado == EstadoPractica.EN_CURSO) reanudarTransporte(desde)
+        pedirSalto(desde)
+        esperarSalto(desde)
+        // El monitor no pertenece a la operación: si mientras tanto llegó otro comando, op ya no vale.
+        if (op.isActive && _ui.value.practica.estado == EstadoPractica.EN_CURSO) reanudarTransporte(desde, op)
     }
 
     fun cerrarResultadoPractica() {
@@ -685,7 +722,7 @@ class PianoViewModel @Inject constructor(
             val enBucle = seleccion.tramo != null
             while (isActive) {
                 val ev = evaluador ?: break
-                if (_ui.value.practica.estado == EstadoPractica.EN_CURSO) {
+                if (_ui.value.practica.estado == EstadoPractica.EN_CURSO && transporteCorriendo) {
                     val tick = tickActual()
                     val grupo = ev.grupoActual
                     when {
@@ -703,6 +740,8 @@ class PianoViewModel @Inject constructor(
         val ev = evaluador ?: return
         val estado = _ui.value.practica.estado
         if (estado != EstadoPractica.EN_CURSO && estado != EstadoPractica.ESPERANDO) return
+        // EN_CURSO pero arrancando: el reloj aún no está en el tramo, el tick no valdría.
+        if (estado == EstadoPractica.EN_CURSO && !transporteCorriendo) return
 
         val estabaEsperando = ev.esperando
         val grupo = ev.grupoActual
@@ -717,7 +756,7 @@ class PianoViewModel @Inject constructor(
         when (resultado) {
             EvaluadorPractica.Resultado.GRUPO_COMPLETO -> {
                 if (estabaEsperando) {
-                    reanudarTransporte(tickActual())
+                    reanudarTransporte(posicionActual())
                     actualizarPracticaUi(EstadoPractica.EN_CURSO, limpiarError = true)
                 } else {
                     actualizarPracticaUi(limpiarError = true)
@@ -742,7 +781,7 @@ class PianoViewModel @Inject constructor(
     /** TransportStop + Seek: la cascada queda congelada con las notas esperadas en la línea. */
     private fun esperarEn(tick: Double) {
         pararTransporte()
-        motor.irATick(tick)
+        pedirSalto(tick)
         evaluador?.marcarEspera()
         actualizarPracticaUi(EstadoPractica.ESPERANDO)
     }
@@ -796,18 +835,63 @@ class PianoViewModel @Inject constructor(
     }
 
     /**
-     * Seek + espera a que el hilo de audio lo procese (como mucho ~60 ms). Evita que el
-     * código siguiente lea del reloj una posición vieja y programe notas fuera de sitio.
+     * Pide un Seek al motor. Hasta que su reloj lo confirme, [posicionActual] devuelve
+     * este destino en vez de la posición vieja.
      */
-    private suspend fun saltarA(tick: Double) {
+    private fun pedirSalto(tick: Double) {
+        destinoSalto = tick
         motor.irATick(tick)
-        repeat(12) {
+    }
+
+    /**
+     * Espera a que el hilo de audio aplique el Seek a [tick] (como mucho ~60 ms). Evita que el
+     * código siguiente lea del reloj una posición vieja y programe notas fuera de sitio.
+     * Es un punto de suspensión: si llega otro comando, la operación que espera se cancela aquí.
+     */
+    private suspend fun esperarSalto(tick: Double) {
+        for (intento in 0 until 12) {
             delay(5)
             motor.leerReloj(reloj)
             val margen = max(PPQ / 8.0, reloj.ticksPerSecond * 0.1)
-            if (abs(reloj.tick - tick) <= margen) return
+            if (abs(reloj.tick - tick) <= margen) break
         }
+        if (destinoSalto == tick) destinoSalto = null
     }
+
+    /** Posición musical que manda ahora: un Seek pendiente o, si no hay, el reloj. */
+    private fun posicionActual(): Double = destinoSalto ?: tickActual()
+
+    // =================================================================================
+    // Operación de transporte
+    // =================================================================================
+
+    /** Cancela la operación anterior (con todo lo que lanzó) y abre una nueva. */
+    private fun nuevaOperacion(): CoroutineScope {
+        cancelarOperacion()
+        val padre = viewModelScope.coroutineContext[Job]
+        return CoroutineScope(viewModelScope.coroutineContext + Job(padre)).also { operacion = it }
+    }
+
+    private fun cancelarOperacion() {
+        operacion?.cancel()
+        operacion = null
+        trabajoMetronomo = null
+    }
+
+    private fun arrancarMotorTransporte() {
+        motor.transporteIniciar()
+        transporteCorriendo = true
+        // A partir de aquí la posición la lleva el reloj del motor (el Seek, si lo había, va antes en su cola).
+        destinoSalto = null
+    }
+
+    private fun pararMotorTransporte() {
+        motor.transporteDetener()
+        transporteCorriendo = false
+    }
+
+    /** Grabando y con el reloj ya en marcha: solo entonces un toque tiene un tick fiable. */
+    private fun grabandoDeVerdad() = transporteCorriendo && _ui.value.grabacion == EstadoGrabacion.GRABANDO
 
     private companion object {
         /** Margen para aceptar una nota antes/después de su tiempo en práctica: una semicorchea. */

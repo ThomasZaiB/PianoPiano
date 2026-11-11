@@ -71,6 +71,10 @@ void SoundFontPlayer::setSustain(int channel, bool down) noexcept {
     tsf_channel_midi_control(mTsf, channel, kMidiSustainCC, down ? 127 : 0);
 }
 
+void SoundFontPlayer::resetSustain() noexcept {
+    for (int ch = 0; ch < kChannelCount; ++ch) setSustain(ch, false);
+}
+
 void SoundFontPlayer::render(float *out, int32_t numFrames) noexcept {
     const int32_t samples = numFrames * 2;
     if (!mTsf) {

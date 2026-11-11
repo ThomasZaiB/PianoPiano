@@ -111,8 +111,16 @@ void AudioEngine::closeLocked() {
     mStream->stop();
     mStream->close();
     mStream.reset();
-    // El hilo de audio ya terminó: podemos silenciar sin carreras.
+    // El hilo de audio ya terminó: este hilo es ahora el único consumidor de la cola y
+    // dueño del estado del secuenciador, así que podemos tocarlos sin carreras.
+    // Se aplican los comandos que quedaron sin procesar (el TransportStop y el Seek que
+    // envía la pantalla al salir) para que la próxima apertura no los herede a destiempo.
+    EngineEvent event{};
+    while (mEvents.pop(event)) handleEvent(event);
+    clearScheduled();
     mPlayer.allNotesOff();
+    // El motor es compartido entre pantallas: ninguna debe heredar el pedal de otra.
+    mPlayer.resetSustain();
 }
 
 void AudioEngine::onErrorAfterClose(oboe::AudioStream * /*stream*/, oboe::Result error) {

@@ -130,7 +130,13 @@ fun CarruselRecientes(
                         var cruda = posicion.value
                         val arranque = awaitHorizontalTouchSlopOrCancellation(abajo.id) { cambio, _ ->
                             cambio.consume()
-                        } ?: return@awaitEachGesture
+                        }
+                        if (arranque == null) {
+                            // Se agarró en movimiento y se soltó sin arrastrar: lo frenamos arriba,
+                            // así que hay que llevarlo a una tarjeta (o de vuelta dentro del rango).
+                            asentar(0f)
+                            return@awaitEachGesture
+                        }
                         rastreador.addPosition(arranque.uptimeMillis, arranque.position)
                         val completo = horizontalDrag(arranque.id) { cambio ->
                             cruda -= cambio.positionChange().x

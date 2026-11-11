@@ -350,3 +350,12 @@ class FisicaCarruselTest {
         assertEquals(500f, f.conBordesElasticos(500f, 0f, 1000f, 400f), 0f)
     }
 }
+
+class EventosReproduccionTest {
+    @Test fun mismaTeclaSeguida_elOffVaAntesQueElOn() {
+        val c = Cancion(titulo = "x", notas = listOf(n(60, 0, 480), n(60, 480, 480)))
+        val e = com.tuapp.piano.domain.usecase.ReproducirCancionUseCase.eventosOrdenados(c)
+        assertEquals(listOf(0L, 480L, 480L, 960L), e.map { it.tick })
+        assertEquals(listOf(true, false, true, false), e.map { it.encender })
+    }
+}

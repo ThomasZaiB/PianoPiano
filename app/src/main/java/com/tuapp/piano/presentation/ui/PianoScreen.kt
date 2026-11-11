@@ -80,6 +80,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tuapp.piano.presentation.ui.common.ModoInstrumento
 import com.tuapp.piano.presentation.ui.common.pulsable
 import com.tuapp.piano.presentation.ui.common.ESCALA_ICONO
 import com.tuapp.piano.R
@@ -122,6 +123,9 @@ fun PianoScreen(
     var confirmarSalida by remember { mutableStateOf(false) }
     val irABiblioteca by rememberUpdatedState(onIrABiblioteca)
     val textoGuardada = stringResource(R.string.piano_guardada)
+
+    // Pantalla siempre encendida y barras del sistema ocultas mientras se toca.
+    ModoInstrumento()
 
     // El stream de audio solo existe con esta pantalla visible.
     LifecycleEventEffect(Lifecycle.Event.ON_START) { vm.onStart() }

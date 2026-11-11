@@ -89,6 +89,9 @@ private const val ELEMENTOS_ENTRADA = 7
 /** A partir de este ancho, y si es más ancha que alta, la pantalla se reparte en dos columnas. */
 private val ANCHO_DOS_COLUMNAS = 560.dp
 
+/** Alto aproximado de la tarjeta grande, para reservar su hueco mientras carga. */
+private val ALTO_MARCADOR_PROTAGONISTA = 200.dp
+
 /**
  * Inicio: "seguir donde lo dejaste" como protagonista, accesos rápidos y canciones recientes.
  *
@@ -121,8 +124,10 @@ fun HomeScreen(
     val reducido = movimientoReducido()
     var yaEntro by rememberSaveable { mutableStateOf(false) }
     val entrada = remember { List(ELEMENTOS_ENTRADA) { Animatable(if (yaEntro || reducido) 1f else 0f) } }
-    LaunchedEffect(Unit) {
-        if (yaEntro) return@LaunchedEffect
+    // La entrada espera a los datos: si arrancara antes, la tarjeta grande cambiaría de
+    // "graba tu primera canción" a "continuar" a mitad de la animación.
+    LaunchedEffect(ui.cargando) {
+        if (yaEntro || ui.cargando) return@LaunchedEffect
         yaEntro = true
         entrada.forEachIndexed { i, progreso ->
             launch {
@@ -152,7 +157,7 @@ fun HomeScreen(
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                         Encabezado(onAjustes, Modifier.entrada(entrada[0]))
                         Spacer(Modifier.height(Espacio.l))
-                        Protagonista(ui.inicio, acciones, Modifier.entrada(entrada[1], escalaInicial = 0.96f))
+                        Protagonista(ui.cargando, ui.inicio, acciones, Modifier.entrada(entrada[1], escalaInicial = 0.96f))
                     }
                     Column(
                         Modifier
@@ -175,7 +180,7 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(Espacio.xl),
                 ) {
                     Encabezado(onAjustes, Modifier.entrada(entrada[0]))
-                    Protagonista(ui.inicio, acciones, Modifier.entrada(entrada[1], escalaInicial = 0.96f))
+                    Protagonista(ui.cargando, ui.inicio, acciones, Modifier.entrada(entrada[1], escalaInicial = 0.96f))
                     Accesos(acciones, entrada, altoTarjeta = 92.dp)
                     Recientes(ui.inicio, acciones, Modifier.entrada(entrada[6]))
                     Spacer(Modifier.height(Espacio.s))
@@ -217,9 +222,18 @@ private fun Encabezado(onAjustes: () -> Unit, modifier: Modifier = Modifier) {
 
 /** La tarjeta grande: seguir con una canción, o empezar si la biblioteca está vacía. */
 @Composable
-private fun Protagonista(inicio: Inicio, acciones: Acciones, modifier: Modifier = Modifier) {
+private fun Protagonista(cargando: Boolean, inicio: Inicio, acciones: Acciones, modifier: Modifier = Modifier) {
     val c = inicio.continuar
-    if (c != null) {
+    if (cargando) {
+        // Hueco neutro mientras Room responde: ni "empezar" ni "continuar" hasta saber cuál toca.
+        Box(
+            modifier
+                .fillMaxWidth()
+                .height(ALTO_MARCADOR_PROTAGONISTA)
+                .clip(MaterialTheme.shapes.extraLarge)
+                .background(PianoColors.Superficie),
+        )
+    } else if (c != null) {
         TarjetaContinuar(
             cancion = c,
             modo = inicio.modoContinuar,
